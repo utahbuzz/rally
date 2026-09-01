@@ -70,7 +70,7 @@ export function RouteGlyph({
   return (
     <g opacity={opacity}>
       {selected && (
-        <path d={d} fill="none" stroke="#34d399" strokeWidth={7} strokeLinecap="round" opacity={0.45} />
+        <path d={d} fill="none" stroke="#a5a2f0" strokeWidth={7} strokeLinecap="round" opacity={0.55} />
       )}
       <path
         d={d}
@@ -94,7 +94,7 @@ export function RouteGlyph({
 
 export function PlayerGlyph({ player, selected }: { player: Player; selected?: boolean }) {
   const sel = selected ? (
-    <circle cx={player.x} cy={player.y} r={PLAYER_R + 4.5} fill="none" stroke="#10b981" strokeWidth={2.4} opacity={0.9} />
+    <circle cx={player.x} cy={player.y} r={PLAYER_R + 4.5} fill="none" stroke="#6965db" strokeWidth={2.4} opacity={0.9} />
   ) : null
 
   if (player.shape === 'text') {

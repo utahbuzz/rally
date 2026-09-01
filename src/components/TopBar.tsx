@@ -29,12 +29,11 @@ export function TopBar({ play }: { play: Play }) {
     <header className="topbar">
       <div className="brand">
         <svg width="26" height="26" viewBox="0 0 32 32">
-          <rect width="32" height="32" rx="7" fill="#10b981" />
+          <rect width="32" height="32" rx="7" fill="#6965db" />
           <circle cx="11" cy="21" r="4.5" fill="none" stroke="#fff" strokeWidth="2.5" />
           <path d="M17 9 L25 17 M25 9 L17 17" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" />
         </svg>
-        <span className="brand-name">Rally</span>
-        <span className="brand-sub">Playbook</span>
+        <span className="brand-name">Playcaller</span>
       </div>
 
       <div className="topbar-center">

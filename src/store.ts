@@ -361,11 +361,15 @@ export const useStore = create<Store>()(
       }
     },
     {
-      name: 'rally-playbook-v1',
+      name: 'playcaller-v1',
       // localStorage can throw in sandboxed/embedded contexts — fall back to memory
       storage: createJSONStorage(() => {
         try {
-          window.localStorage.getItem('rally-playbook-v1')
+          // carry over playbooks saved under the app's previous name
+          const legacy = window.localStorage.getItem('rally-playbook-v1')
+          if (legacy && !window.localStorage.getItem('playcaller-v1')) {
+            window.localStorage.setItem('playcaller-v1', legacy)
+          }
           return window.localStorage
         } catch {
           const mem = new Map<string, string>()

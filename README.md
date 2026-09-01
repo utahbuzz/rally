@@ -1,4 +1,4 @@
-# Rally Playbook
+# Playcaller
 
 A fast, modern football play designer that runs entirely in the browser — a
 web-native competitor to Pro Quick Draw (which is a PowerPoint/Visio plugin).
@@ -8,7 +8,7 @@ no learning curve, works on a laptop or a sideline tablet.
 
 ## Competitive advantages
 
-| Pro Quick Draw | Rally Playbook |
+| Pro Quick Draw | Playcaller |
 | --- | --- |
 | PowerPoint/Visio plugin, desktop only | Runs in any browser, zero install |
 | Dated UI, steep learning curve | Modern canvas, one-click everything |

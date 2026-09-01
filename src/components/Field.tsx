@@ -196,7 +196,7 @@ export function Field({ play }: { play: Play }) {
               cy={p.y}
               r={5}
               fill="#fff"
-              stroke="#10b981"
+              stroke="#6965db"
               strokeWidth={2.2}
               style={{ cursor: 'move' }}
               onPointerDown={(e) => onVertexDown(e, selectedRoute.id, i)}

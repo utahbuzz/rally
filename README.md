@@ -111,12 +111,14 @@ npm run build    # type-check + single-file production build in dist/
 node scripts/smoke.mjs  # Playwright smoke test against dist/index.html
 ```
 
-The production build is a single self-contained `dist/index.html` (~61 KB
-gzipped) — host it anywhere, or open it from disk. File downloads (PNG
+The production build is a single self-contained `dist/index.html` (~120 KB
+gzipped) — host it on any static host, or open it from disk. It must be
+served as `text/html`; hosts that serve HTML as `text/plain` (Supabase, the
+GitHub CDNs) show the source instead of the app. File downloads (PNG
 export, backup) require a normal browser context; sandboxed preview iframes
 may block them.
 
 ## Stack
 
-Vite + React + TypeScript, SVG canvas, Zustand (localStorage persistence).
-No backend — cloud sync/accounts (Supabase) is the planned next layer.
+Vite + React + TypeScript, SVG canvas, Zustand (localStorage persistence),
+Supabase for cloud sync, GitHub Pages for hosting.

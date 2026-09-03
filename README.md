@@ -35,6 +35,25 @@ no learning curve, works on a laptop or a sideline tablet.
 - **Undo/redo**, keyboard shortcuts (V/R/B/M tools, Ctrl+Z), autosave to
   localStorage
 
+## Coach AI (in-app chat)
+
+Click **✦ Coach AI** in the app for a side panel where you ask for plays in
+plain language — "5 plays to beat Cover 2 on 3rd and 6" — and they draw
+straight onto the canvas and into the playbook.
+
+The `claude-proxy` edge function is a thin pass-through to the Anthropic
+Messages API that exists only so an API key never ships in the browser
+bundle; the tool loop itself runs in the browser (`src/coordinator.ts`), so
+the AI draws through the same formation, route, hash and spotting code as
+the canvas and can never produce an invalid play.
+
+Enable it either way:
+
+- paste an Anthropic API key into the panel (kept in that browser only), or
+- set an `ANTHROPIC_API_KEY` secret on the Supabase project, which enables it
+  for everyone — note the endpoint is public, so anyone with the URL could
+  then spend those credits.
+
 ## AI play design (MCP server)
 
 Playcaller ships an MCP server so Claude can design plays for you:

@@ -38,7 +38,7 @@ function SyncChip() {
   )
 }
 
-export function TopBar({ play }: { play: Play }) {
+export function TopBar({ play, onOpenCoach }: { play: Play; onOpenCoach: () => void }) {
   const s = useStore.getState
   const canUndo = useStore((st) => st.past.length > 0)
   const canRedo = useStore((st) => st.future.length > 0)
@@ -121,6 +121,9 @@ export function TopBar({ play }: { play: Play }) {
       </div>
 
       <div className="topbar-right">
+        <button className="btn coach-btn" onClick={onOpenCoach} title="Ask the AI coordinator for plays">
+          ✦ Coach AI
+        </button>
         <SyncChip />
         <span className="divider" />
         <button className="btn ghost" disabled={!canUndo} onClick={() => s().undo()} title="Undo (Ctrl+Z)">

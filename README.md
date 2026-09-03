@@ -85,10 +85,11 @@ with no policies, and all access goes through `security definer` RPCs
 listens on a realtime broadcast channel (30s poll as fallback); with no
 network it silently stays local-only.
 
-The production app is served by **GitHub Pages** from `docs/index.html`
-(enable in repo Settings -> Pages -> deploy from this branch, `/docs`).
-Deploying a new version is `npm run build && cp dist/index.html
-docs/index.html` plus a git push.
+**Live app: https://utahbuzz.github.io/rally/**
+
+It is served by GitHub Pages from `docs/index.html` (repo Settings -> Pages
+-> deploy from this branch, `/docs`). Deploying a new version is `npm run
+build && cp dist/index.html docs/index.html` plus a git push.
 
 Note: the app cannot be hosted on Supabase. Both Edge Functions and Storage
 force `content-type: text/plain` and `content-security-policy: default-src

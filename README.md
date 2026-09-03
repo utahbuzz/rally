@@ -144,9 +144,9 @@ scripts are blocked. The GitHub CDNs (jsDelivr, Statically) do the same.
 The `playcaller` edge function now just 302-redirects to the Pages URL so
 older links keep working.
 
-Roadmap: an in-app AI coordinator chat calling Claude with the same MCP
-tools, opponent-data ingestion for tendency analysis, and generated install
-sheets / call sheets / practice scripts.
+Roadmap: opponent-data ingestion (Hudl breakdown exports) for tendency
+analysis, and generating a full week of installs, call sheets and practice
+scripts from it.
 
 ## Develop
 

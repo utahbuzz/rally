@@ -135,7 +135,10 @@ export function initSync(): void {
   }
 
   pull()
-    .then(() => setStatus('synced'))
+    .then(() => {
+      setStatus('synced')
+      startLiveUpdates()
+    })
     .catch(() => setStatus('local'))
 
   // push after local edits (skip changes we just applied from the server)
@@ -147,7 +150,20 @@ export function initSync(): void {
     }
   })
 
-  // realtime: other devices and the MCP server ping this channel after writes
+}
+
+/**
+ * Open the realtime channel and the fallback poll. Only called once the first
+ * pull succeeds — where the backend is unreachable (offline, or a sandboxed
+ * preview that blocks external requests) the app stays local-only and quiet
+ * instead of retrying a websocket forever.
+ */
+let liveStarted = false
+function startLiveUpdates(): void {
+  if (liveStarted || !sb) return
+  liveStarted = true
+
+  // other devices and the MCP server ping this channel after writes
   channel = sb
     .channel(`pb:${playbookId}`)
     .on('broadcast', { event: 'sync' }, ({ payload }) => {

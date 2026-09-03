@@ -85,10 +85,18 @@ with no policies, and all access goes through `security definer` RPCs
 listens on a realtime broadcast channel (30s poll as fallback); with no
 network it silently stays local-only.
 
-The production app is served by the `playcaller` edge function
-(`supabase/functions/playcaller/`), which proxies the committed single-file
-build from `hosting/index.html` — deploying a new version is just a git
-push.
+The production app is served by **GitHub Pages** from `docs/index.html`
+(enable in repo Settings -> Pages -> deploy from this branch, `/docs`).
+Deploying a new version is `npm run build && cp dist/index.html
+docs/index.html` plus a git push.
+
+Note: the app cannot be hosted on Supabase. Both Edge Functions and Storage
+force `content-type: text/plain` and `content-security-policy: default-src
+'none'; sandbox` on HTML responses as an anti-phishing measure (verified
+against the live endpoints), so the page is served as source text and its
+scripts are blocked. The GitHub CDNs (jsDelivr, Statically) do the same.
+The `playcaller` edge function now just 302-redirects to the Pages URL so
+older links keep working.
 
 Roadmap: an in-app AI coordinator chat calling Claude with the same MCP
 tools, opponent-data ingestion for tendency analysis, and generated install

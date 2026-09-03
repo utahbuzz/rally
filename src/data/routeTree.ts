@@ -35,15 +35,26 @@ export const QUICK_ASSIGNMENTS: QuickRoute[] = [
   { name: 'Blitz', kind: 'route', points: [{ x: 0, y: -46 }] },
 ]
 
-/** Build absolute route points for a player from a quick-route template. */
-export function materializeQuickRoute(player: Player, template: QuickRoute): Point[] {
-  const onRight = player.x >= FIELD.BALL_X
+/**
+ * Build absolute route points for a player from a quick-route template.
+ * `ballX` is where the ball is spotted: routes mirror by which side of the
+ * BALL the player is on, not the middle of the field, so the library still
+ * reads correctly when a play is spotted on a hash.
+ */
+export function materializeQuickRoute(
+  player: Player,
+  template: QuickRoute,
+  ballX: number = FIELD.BALL_X,
+): Point[] {
+  const onRight = player.x >= ballX
   // Defenders attack downward (+y is toward the offense for them already,
   // since templates use -y = upfield); flip y for defense so routes go toward the LOS.
   const flipY = player.team === 'D' ? -1 : 1
   const flipX = onRight ? 1 : -1
+  // keep routes on the canvas — a wide receiver spotted on the boundary hash
+  // would otherwise run its break clean off the field
   const pts = template.points.map((p) => ({
-    x: player.x + p.x * flipX,
+    x: Math.min(Math.max(player.x + p.x * flipX, 6), FIELD.W - 6),
     y: player.y + p.y * flipY,
   }))
   return [{ x: player.x, y: player.y }, ...pts]

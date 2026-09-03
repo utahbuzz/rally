@@ -157,7 +157,7 @@ export function Field({ play }: { play: Play }) {
       onPointerUp={onUp}
       onDoubleClick={onDblClick}
     >
-      <FieldBackground />
+      <FieldBackground ballX={play.ballX} />
 
       {/* routes (fade others while drawing) */}
       {play.routes.map((r) => (

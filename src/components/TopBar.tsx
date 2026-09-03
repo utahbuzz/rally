@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
-import { Play } from '../types'
+import { HASH_SPOTS, hashIdForX, Play } from '../types'
 import { DEFENSE_FORMATIONS, OFFENSE_FORMATIONS } from '../data/formations'
 import { getShareUrl, onSyncStatus, SyncStatus } from '../sync'
 import { exportCurrentPlayPNG, exportPlaybookJSON, parsePlaybookJSON } from '../utils/export'
@@ -104,6 +104,17 @@ export function TopBar({ play }: { play: Play }) {
             </option>
           ))}
         </select>
+        <div className="seg hash-seg" title="Ball spot across the field - matches the L / LM / RM / R hash notation on practice scripts">
+          {HASH_SPOTS.map((spot) => (
+            <button
+              key={spot.id}
+              className={`seg-btn ${hashIdForX(play.ballX) === spot.id ? 'active' : ''}`}
+              onClick={() => s().setBallSpot(spot.x)}
+            >
+              {spot.label}
+            </button>
+          ))}
+        </div>
         <button className="btn ghost" onClick={() => s().flipPlay()} title="Mirror the play left-right">
           ⇋ Flip
         </button>

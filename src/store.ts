@@ -33,6 +33,7 @@ interface Store {
   deletePlay: (id: string) => void
   updatePlay: (patch: Partial<Play>) => void
   applyFormation: (team: Team, name: string) => void
+  setBallSpot: (x: number) => void
   clearTeam: (team: Team) => void
   flipPlay: () => void
   movePlayer: (id: string, dx: number, dy: number) => void
@@ -55,17 +56,24 @@ interface Store {
   importPlays: (plays: Play[]) => void
 }
 
-function makePlay(offFormation = 'Gun Spread (2x2)', defFormation = ''): Play {
+/** Shift players laterally, e.g. to spot a formation on a hash. */
+function shiftX<T extends { x: number }>(items: T[], dx: number): T[] {
+  return dx === 0 ? items : items.map((i) => ({ ...i, x: i.x + dx }))
+}
+
+function makePlay(offFormation = 'Gun Spread (2x2)', defFormation = '', ballX = FIELD.BALL_X): Play {
   const off = findFormation('O', offFormation)
   const def = defFormation ? findFormation('D', defFormation) : undefined
+  const dx = ballX - FIELD.BALL_X
   return {
     id: uid(),
     name: 'New Play',
+    ballX,
     offFormation: off ? offFormation : '',
     defFormation: def ? defFormation : '',
     tags: [],
     notes: '',
-    players: [...(off ? off.players() : []), ...(def ? def.players() : [])],
+    players: shiftX([...(off ? off.players() : []), ...(def ? def.players() : [])], dx),
     routes: [],
     updatedAt: Date.now(),
   }
@@ -157,10 +165,11 @@ export const useStore = create<Store>()(
           patchCurrent((p) => {
             const keep = p.players.filter((pl) => pl.team !== team)
             const removed = new Set(p.players.filter((pl) => pl.team === team).map((pl) => pl.id))
+            const dx = (p.ballX ?? FIELD.BALL_X) - FIELD.BALL_X
             return {
               ...p,
               [team === 'O' ? 'offFormation' : 'defFormation']: name,
-              players: [...keep, ...def.players()],
+              players: [...keep, ...shiftX(def.players(), dx)],
               routes: p.routes.filter((r) => !removed.has(r.playerId)),
             }
           })
@@ -181,10 +190,29 @@ export const useStore = create<Store>()(
           set({ selectedPlayerId: null, selectedRouteId: null })
         },
 
-        flipPlay: () => {
+        setBallSpot: (x) => {
+          const play = current()
+          if (!play) return
+          const dx = x - (play.ballX ?? FIELD.BALL_X)
+          if (dx === 0) return
           get().commit()
           patchCurrent((p) => ({
             ...p,
+            ballX: x,
+            players: shiftX(p.players, dx),
+            routes: p.routes.map((r) => ({
+              ...r,
+              points: r.points.map((pt) => ({ x: pt.x + dx, y: pt.y })),
+            })),
+          }))
+        },
+
+        flipPlay: () => {
+          get().commit()
+          // mirror the whole play, ball spot included
+          patchCurrent((p) => ({
+            ...p,
+            ballX: FIELD.W - (p.ballX ?? FIELD.BALL_X),
             players: p.players.map((pl) => ({ ...pl, x: FIELD.W - pl.x })),
             routes: p.routes.map((r) => ({
               ...r,
@@ -269,7 +297,7 @@ export const useStore = create<Store>()(
             playerId,
             kind: template.kind,
             color: get().routeColor,
-            points: materializeQuickRoute(player, template),
+            points: materializeQuickRoute(player, template, play?.ballX ?? FIELD.BALL_X),
           }
           patchCurrent((p) => ({
             ...p,

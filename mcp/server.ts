@@ -14,7 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createClient, RealtimeChannel, SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { FIELD, Play, Player, Point, Route, ROUTE_COLORS, uid } from '../src/types'
+import { FIELD, HASH_SPOTS, hashIdForX, Play, Player, Point, Route, ROUTE_COLORS, uid } from '../src/types'
 import { DEFENSE_FORMATIONS, OFFENSE_FORMATIONS, findFormation } from '../src/data/formations'
 import { QUICK_ROUTES, QUICK_ASSIGNMENTS, materializeQuickRoute } from '../src/data/routeTree'
 import { playToSvg } from './renderSvg'
@@ -69,6 +69,14 @@ const COLOR_NAMES: Record<string, string> = {
 }
 
 const ALL_TEMPLATES = [...QUICK_ROUTES, ...QUICK_ASSIGNMENTS]
+
+const HASH_IDS = ['L', 'LM', 'MOF', 'RM', 'R'] as const
+
+/** Field x for a hash id, and the shift needed to move a play there. */
+function hashSpot(hash?: string): { x: number; dx: number } {
+  const spot = HASH_SPOTS.find((h) => h.id === (hash ?? 'MOF')) ?? HASH_SPOTS[2]
+  return { x: spot.x, dx: spot.x - FIELD.BALL_X }
+}
 
 const storeLabel = CLOUD ? `cloud playbook ${PLAYBOOK_ID}` : PLAYBOOK_PATH
 
@@ -207,7 +215,11 @@ type AssignmentInput = {
 }
 
 /** Materialize route assignments against a set of players (shared by both play tools). */
-function buildRoutes(players: Player[], assignments: AssignmentInput[]): { routes: Route[]; problems: string[] } {
+function buildRoutes(
+  players: Player[],
+  assignments: AssignmentInput[],
+  ballX: number = FIELD.BALL_X,
+): { routes: Route[]; problems: string[] } {
   const routes: Route[] = []
   const problems: string[] = []
   for (const a of assignments) {
@@ -237,7 +249,7 @@ function buildRoutes(players: Player[], assignments: AssignmentInput[]): { route
         problems.push(`unknown route "${a.route}" for ${a.player} (see get_route_library)`)
         continue
       }
-      points = materializeQuickRoute(player, template)
+      points = materializeQuickRoute(player, template, ballX)
       kind = a.kind ?? template.kind
     } else {
       problems.push(`assignment for ${a.player} needs a route or custom_path`)
@@ -280,12 +292,18 @@ server.registerTool(
         .string()
         .optional()
         .describe('Optional defensive front to show as a scout look'),
+      hash: z
+        .enum(HASH_IDS)
+        .optional()
+        .describe(
+          'Ball spot across the field, using practice-script notation: L or R = hash, LM/RM = between hash and middle, MOF = middle (default). Moves the ball and the whole formation.',
+        ),
       tags: z.array(z.string()).optional().describe('e.g. ["Pass", "3rd Down", "vs Cover 2"]'),
       notes: z.string().optional().describe('Coaching notes: read progression, protection, keys'),
       assignments: z.array(assignmentSchema).describe('One entry per player who gets a route/block'),
     },
   },
-  async ({ name, offense_formation, defense_formation, tags, notes, assignments }) => {
+  async ({ name, offense_formation, defense_formation, hash, tags, notes, assignments }) => {
     const off = findFormation('O', offense_formation)
     if (!off) {
       return text(
@@ -299,12 +317,17 @@ server.registerTool(
       )
     }
 
-    const players = [...off.players(), ...(def ? def.players() : [])]
-    const { routes, problems } = buildRoutes(players, assignments)
+    const spot = hashSpot(hash)
+    const players = [...off.players(), ...(def ? def.players() : [])].map((p) => ({
+      ...p,
+      x: p.x + spot.dx,
+    }))
+    const { routes, problems } = buildRoutes(players, assignments, spot.x)
 
     const play: Play = {
       id: uid(),
       name,
+      ballX: spot.x,
       offFormation: off.name,
       defFormation: def?.name ?? '',
       tags: tags ?? [],
@@ -318,7 +341,7 @@ server.registerTool(
 
     const warn = problems.length ? `\nWarnings: ${problems.join('; ')}` : ''
     return text(
-      `Created "${name}" (${off.name}${def ? ` vs ${def.name}` : ''}) with ${routes.length} assignments. Playbook now has ${count} play(s) in ${storeLabel}.${warn}`,
+      `Created "${name}" (${off.name}${def ? ` vs ${def.name}` : ''}${hash && hash !== 'MOF' ? `, ${hash} hash` : ''}) with ${routes.length} assignments. Playbook now has ${count} play(s) in ${storeLabel}.${warn}`,
     )
   },
 )
@@ -331,6 +354,12 @@ server.registerTool(
       'Create a play placing every player yourself — for opponent scout cards and schemes the formation library does not cover (Wing-T, double wing, flexbone, unbalanced lines, odd fronts…). Place 11 players per side you use. The ball is at x 26.65 yd; the field is 53.3 yd wide. Typical offensive line: C at x 26.65, guards ±2.4 yd, tackles ±4.8 yd, all at depth 1.2. Assignments work exactly like create_play (route names or custom_path), so you can draw run schemes with blocks and ball-carrier paths.',
     inputSchema: {
       name: z.string(),
+      hash: z
+        .enum(HASH_IDS)
+        .optional()
+        .describe(
+          'Ball spot: L or R = hash, LM/RM = between hash and middle, MOF = middle (default). Place the players as if the ball were at midfield; the hash then shifts the whole picture.',
+        ),
       tags: z.array(z.string()).optional().describe('e.g. ["Scout", "Opponent Run Game"]'),
       notes: z.string().optional(),
       players: z
@@ -350,22 +379,24 @@ server.registerTool(
       assignments: z.array(assignmentSchema).optional().describe('Routes/blocks, same format as create_play'),
     },
   },
-  async ({ name, tags, notes, players: placed, assignments }) => {
+  async ({ name, hash, tags, notes, players: placed, assignments }) => {
+    const spot = hashSpot(hash)
     const players: Player[] = placed.map((p) => ({
       id: uid(),
       team: p.team,
       label: p.label.toUpperCase(),
-      x: Math.min(Math.max(p.x_yards * 10, 8), FIELD.W - 8),
+      x: Math.min(Math.max(p.x_yards * 10 + spot.dx, 8), FIELD.W - 8),
       y:
         p.team === 'O'
           ? Math.min(FIELD.LOS + 10 + p.depth_yards * 10, FIELD.H - 10)
           : Math.max(FIELD.LOS - 12 - p.depth_yards * 10, 10),
       shape: p.team === 'D' ? 'text' : p.label.toUpperCase() === 'C' ? 'square' : 'circle',
     }))
-    const { routes, problems } = buildRoutes(players, assignments ?? [])
+    const { routes, problems } = buildRoutes(players, assignments ?? [], spot.x)
     const play: Play = {
       id: uid(),
       name,
+      ballX: spot.x,
       offFormation: 'Custom',
       defFormation: '',
       tags: tags ?? [],
@@ -436,7 +467,9 @@ server.registerTool(
               return ''
             }
             used++
-            return `<div class="card"><div class="card-head"><span class="card-name">${escapeHtml(play.name)}</span><span class="card-form">${escapeHtml(play.offFormation || 'Custom')}</span></div>${playToSvg(play)}${play.notes ? `<div class="card-notes">${escapeHtml(play.notes)}</div>` : ''}</div>`
+            const hashId = hashIdForX(play.ballX)
+            const hashTag = hashId === 'MOF' ? '' : ` · ${hashId}`
+            return `<div class="card"><div class="card-head"><span class="card-name">${escapeHtml(play.name)}</span><span class="card-form">${escapeHtml((play.offFormation || 'Custom') + hashTag)}</span></div>${playToSvg(play)}${play.notes ? `<div class="card-notes">${escapeHtml(play.notes)}</div>` : ''}</div>`
           })
           .join('')
         return `<section><h2>${escapeHtml(s.label)}</h2>${s.note ? `<p class="section-note">${escapeHtml(s.note)}</p>` : ''}<div class="grid">${cards}</div></section>`

@@ -31,6 +31,8 @@ export interface Route {
 export interface Play {
   id: string
   name: string
+  /** Where the ball is spotted across the field. Defaults to FIELD.BALL_X. */
+  ballX?: number
   offFormation: string
   defFormation: string
   tags: string[]
@@ -51,6 +53,29 @@ export const FIELD = {
   FIRST_DOWN: 160, // 10 yards downfield
   HASH_L: 200,
   HASH_R: 333,
+}
+
+/**
+ * Ball spots across the width of the field, matching the hash notation
+ * coaches use on practice scripts (L / LM / RM / R plus middle of field).
+ * Hash marks sit 40 feet apart, i.e. 20 yards in from each sideline.
+ */
+export const HASH_SPOTS: Array<{ id: string; label: string; x: number }> = [
+  { id: 'L', label: 'L', x: FIELD.HASH_L },
+  { id: 'LM', label: 'LM', x: (FIELD.HASH_L + FIELD.BALL_X) / 2 },
+  { id: 'MOF', label: 'Mid', x: FIELD.BALL_X },
+  { id: 'RM', label: 'RM', x: (FIELD.BALL_X + FIELD.HASH_R) / 2 },
+  { id: 'R', label: 'R', x: FIELD.HASH_R },
+]
+
+/** Nearest named spot for a ball x (used to highlight the active hash). */
+export function hashIdForX(x: number | undefined): string {
+  const bx = x ?? FIELD.BALL_X
+  let best = HASH_SPOTS[2]
+  for (const spot of HASH_SPOTS) {
+    if (Math.abs(spot.x - bx) < Math.abs(best.x - bx)) best = spot
+  }
+  return best.id
 }
 
 export const ROUTE_COLORS = [

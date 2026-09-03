@@ -12,7 +12,7 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function fieldBackground(): string {
+function fieldBackground(ballX: number): string {
   const parts: string[] = [`<rect width="${FIELD.W}" height="${FIELD.H}" fill="#ffffff"/>`]
   parts.push(`<line x1="2.5" y1="0" x2="2.5" y2="${FIELD.H}" stroke="#c7ced6" stroke-width="4"/>`)
   parts.push(`<line x1="${FIELD.W - 2.5}" y1="0" x2="${FIELD.W - 2.5}" y2="${FIELD.H}" stroke="#c7ced6" stroke-width="4"/>`)
@@ -34,7 +34,7 @@ function fieldBackground(): string {
     `<line x1="4" y1="${FIELD.FIRST_DOWN}" x2="${FIELD.W - 4}" y2="${FIELD.FIRST_DOWN}" stroke="#f59e0b" stroke-width="2" stroke-dasharray="10 7" opacity="0.75"/>`,
   )
   parts.push(`<line x1="4" y1="${FIELD.LOS}" x2="${FIELD.W - 4}" y2="${FIELD.LOS}" stroke="#94a3b8" stroke-width="2.2"/>`)
-  parts.push(`<ellipse cx="${FIELD.BALL_X}" cy="${FIELD.LOS}" rx="5.5" ry="3.6" fill="#92400e" stroke="#78350f" stroke-width="1"/>`)
+  parts.push(`<ellipse cx="${ballX}" cy="${FIELD.LOS}" rx="5.5" ry="3.6" fill="#92400e" stroke="#78350f" stroke-width="1"/>`)
   return parts.join('')
 }
 
@@ -77,7 +77,7 @@ function playerSvg(p: Player): string {
 export function playToSvg(play: Play): string {
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FIELD.W} ${FIELD.H}" font-family="Inter, system-ui, sans-serif">` +
-    fieldBackground() +
+    fieldBackground(play.ballX ?? FIELD.BALL_X) +
     play.routes.map(routeSvg).join('') +
     play.players.map(playerSvg).join('') +
     `</svg>`

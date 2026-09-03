@@ -3,7 +3,7 @@ import { arrowHead, blockBar, roundedPath } from '../utils/geometry'
 
 export const PLAYER_R = 9.5
 
-export function FieldBackground() {
+export function FieldBackground({ ballX = FIELD.BALL_X }: { ballX?: number }) {
   const yardLines = []
   for (let y = 10; y <= FIELD.H - 10; y += 50) {
     if (y === FIELD.LOS) continue
@@ -46,7 +46,7 @@ export function FieldBackground() {
       {/* line of scrimmage */}
       <line x1={4} y1={FIELD.LOS} x2={FIELD.W - 4} y2={FIELD.LOS} stroke="#94a3b8" strokeWidth={2.2} />
       {/* ball */}
-      <ellipse cx={FIELD.BALL_X} cy={FIELD.LOS} rx={5.5} ry={3.6} fill="#92400e" stroke="#78350f" strokeWidth={1} />
+      <ellipse cx={ballX} cy={FIELD.LOS} rx={5.5} ry={3.6} fill="#92400e" stroke="#78350f" strokeWidth={1} />
     </g>
   )
 }
@@ -152,7 +152,7 @@ export function PlayerGlyph({ player, selected }: { player: Player; selected?: b
 export function PlaySVG({ play, className }: { play: Play; className?: string }) {
   return (
     <svg viewBox={`0 0 ${FIELD.W} ${FIELD.H}`} className={className} style={{ display: 'block', pointerEvents: 'none' }}>
-      <FieldBackground />
+      <FieldBackground ballX={play.ballX} />
       {play.routes.map((r) => (
         <RouteGlyph key={r.id} route={r} />
       ))}

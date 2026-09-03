@@ -17,6 +17,7 @@ import { z } from 'zod'
 import { FIELD, Play, Player, Point, Route, ROUTE_COLORS, uid } from '../src/types'
 import { DEFENSE_FORMATIONS, OFFENSE_FORMATIONS, findFormation } from '../src/data/formations'
 import { QUICK_ROUTES, QUICK_ASSIGNMENTS, materializeQuickRoute } from '../src/data/routeTree'
+import { playToSvg } from './renderSvg'
 
 const PLAYBOOK_PATH = resolve(process.env.PLAYCALLER_PLAYBOOK ?? 'playcaller-playbook.json')
 
@@ -123,6 +124,10 @@ function savePlaybookFile(plays: Play[]): void {
 
 function text(s: string) {
   return { content: [{ type: 'text' as const, text: s }] }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 const COVERAGE_GUIDE: Record<string, string> = {
@@ -388,9 +393,83 @@ server.registerTool(
     if (!plays.length) return text(`Playbook is empty (${storeLabel}).`)
     const lines = plays.map(
       (p, i) =>
-        `${i + 1}. ${p.name} — ${p.offFormation || 'Custom'}${p.defFormation ? ` vs ${p.defFormation}` : ''}${p.tags.length ? ` [${p.tags.join(', ')}]` : ''}`,
+        `${i + 1}. ${p.name} — ${p.offFormation || 'Custom'}${p.defFormation ? ` vs ${p.defFormation}` : ''}${p.tags.length ? ` [${p.tags.join(', ')}]` : ''}${p.notes ? ` — ${p.notes.slice(0, 90)}` : ''}`,
     )
     return text(`${plays.length} play(s) in ${storeLabel}:\n${lines.join('\n')}`)
+  },
+)
+
+server.registerTool(
+  'create_game_plan_sheet',
+  {
+    title: 'Create a game-plan sheet',
+    description:
+      'Generate a printable game-plan document (call sheet, install sheet, or scout card pack) as a self-contained HTML file from plays already in the playbook. Sections group plays by situation ("1st Down", "3rd & Long", "Red Zone"), install day, or opponent series. Every play renders with its full diagram and coaching notes. The coach opens the file in a browser and prints it (Ctrl+P) — sections break cleanly across pages.',
+    inputSchema: {
+      title: z.string().describe('Sheet title, e.g. "Week 4 vs Central — Offensive Installs"'),
+      subtitle: z.string().optional().describe('Optional second line, e.g. "Install Wednesday · Cover 2 heavy opponent"'),
+      sections: z
+        .array(
+          z.object({
+            label: z.string().describe('Section heading, e.g. "3rd & Long" or "Install Day 1"'),
+            plays: z.array(z.string()).describe('Exact play names from list_plays'),
+            note: z.string().optional().describe('Optional coaching note shown under the heading'),
+          }),
+        )
+        .min(1),
+      output_path: z.string().optional().describe('Where to write the HTML file (default ./game-plan.html)'),
+    },
+  },
+  async ({ title, subtitle, sections, output_path }) => {
+    const plays = await loadPlaybook()
+    const byName = new Map(plays.map((p) => [p.name, p]))
+    const missing: string[] = []
+    let used = 0
+
+    const sectionHtml = sections
+      .map((s) => {
+        const cards = s.plays
+          .map((name) => {
+            const play = byName.get(name)
+            if (!play) {
+              missing.push(name)
+              return ''
+            }
+            used++
+            return `<div class="card"><div class="card-head"><span class="card-name">${escapeHtml(play.name)}</span><span class="card-form">${escapeHtml(play.offFormation || 'Custom')}</span></div>${playToSvg(play)}${play.notes ? `<div class="card-notes">${escapeHtml(play.notes)}</div>` : ''}</div>`
+          })
+          .join('')
+        return `<section><h2>${escapeHtml(s.label)}</h2>${s.note ? `<p class="section-note">${escapeHtml(s.note)}</p>` : ''}<div class="grid">${cards}</div></section>`
+      })
+      .join('')
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
+body{font-family:Inter,system-ui,-apple-system,sans-serif;color:#1b1b22;margin:24px;background:#fff}
+header{border-bottom:3px solid #6965db;padding-bottom:10px;margin-bottom:18px}
+h1{margin:0;font-size:22px}
+.subtitle{color:#717080;margin-top:4px;font-size:13px}
+section{margin-bottom:22px;break-inside:avoid-page}
+h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:#6965db;border-bottom:1px solid #e6e5ee;padding-bottom:4px;margin:0 0 4px}
+.section-note{color:#717080;font-size:12px;margin:2px 0 8px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
+.card{border:1.5px solid #d5d3e0;border-radius:8px;overflow:hidden;break-inside:avoid}
+.card svg{display:block;width:100%}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:6px;padding:5px 8px 4px;border-bottom:1px solid #e6e5ee}
+.card-name{font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-form{color:#717080;font-size:10px;white-space:nowrap}
+.card-notes{padding:4px 8px 6px;font-size:10.5px;color:#4b4a58;border-top:1px solid #e6e5ee}
+footer{color:#a5a3b5;font-size:10px;margin-top:16px}
+@media print{body{margin:8mm}}
+</style></head><body>
+<header><h1>${escapeHtml(title)}</h1><div class="subtitle">${subtitle ? escapeHtml(subtitle) + ' · ' : ''}${new Date().toLocaleDateString()} · Playcaller</div></header>
+${sectionHtml}
+<footer>Generated with Playcaller — open in a browser and print for the laminated sheet.</footer>
+</body></html>`
+
+    const out = resolve(output_path ?? 'game-plan.html')
+    writeFileSync(out, html)
+    const warn = missing.length ? `\nNot found in playbook (skipped): ${missing.join(', ')}` : ''
+    return text(`Wrote "${title}" — ${sections.length} section(s), ${used} play card(s) → ${out}${warn}`)
   },
 )
 

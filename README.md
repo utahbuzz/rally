@@ -35,6 +35,40 @@ no learning curve, works on a laptop or a sideline tablet.
 - **Undo/redo**, keyboard shortcuts (V/R/B/M tools, Ctrl+Z), autosave to
   localStorage
 
+## AI play design (MCP server)
+
+Playcaller ships an MCP server so Claude can design plays for you:
+
+> "Build me 10 plays that beat Cover 2."
+
+Claude calls the server's tools — `list_formations`, `get_route_library`,
+`coverage_guide` (a built-in knowledge base on attacking each coverage), and
+`create_play` — and writes real, correctly-drawn plays to a playbook file.
+Open Playcaller and hit **Restore** to load them.
+
+**Claude Code:** the repo's `.mcp.json` registers the server automatically.
+
+**Claude Desktop:** add to your MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "playcaller": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/playcaller/mcp/server.ts"]
+    }
+  }
+}
+```
+
+The playbook file defaults to `./playcaller-playbook.json`; set
+`PLAYCALLER_PLAYBOOK` to change it. `npm run test:mcp` runs an end-to-end
+test that drives the server the way a client would.
+
+Roadmap: Supabase sync (plays appear in the app live, remote MCP for
+claude.ai), then an in-app AI coordinator chat calling Claude with these
+same tools.
+
 ## Develop
 
 ```bash

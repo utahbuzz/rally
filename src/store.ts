@@ -4,6 +4,7 @@ import { FIELD, Play, Point, Route, RouteKind, ROUTE_COLORS, Team, Tool, uid } f
 import { findFormation } from './data/formations'
 import { materializeQuickRoute, QuickRoute } from './data/routeTree'
 import { seedPlays } from './data/seed'
+import { respot, spotFromMid } from './utils/field'
 
 interface HistoryEntry {
   playId: string
@@ -56,15 +57,15 @@ interface Store {
   importPlays: (plays: Play[]) => void
 }
 
-/** Shift players laterally, e.g. to spot a formation on a hash. */
-function shiftX<T extends { x: number }>(items: T[], dx: number): T[] {
-  return dx === 0 ? items : items.map((i) => ({ ...i, x: i.x + dx }))
+/** Place freshly-built formation players (defined at midfield) at a ball spot. */
+function spotPlayers<T extends { x: number }>(items: T[], ballX: number): T[] {
+  if (ballX === FIELD.BALL_X) return items
+  return items.map((i) => ({ ...i, x: spotFromMid(i.x, ballX) }))
 }
 
 function makePlay(offFormation = 'Gun Spread (2x2)', defFormation = '', ballX = FIELD.BALL_X): Play {
   const off = findFormation('O', offFormation)
   const def = defFormation ? findFormation('D', defFormation) : undefined
-  const dx = ballX - FIELD.BALL_X
   return {
     id: uid(),
     name: 'New Play',
@@ -73,7 +74,7 @@ function makePlay(offFormation = 'Gun Spread (2x2)', defFormation = '', ballX = 
     defFormation: def ? defFormation : '',
     tags: [],
     notes: '',
-    players: shiftX([...(off ? off.players() : []), ...(def ? def.players() : [])], dx),
+    players: spotPlayers([...(off ? off.players() : []), ...(def ? def.players() : [])], ballX),
     routes: [],
     updatedAt: Date.now(),
   }
@@ -165,11 +166,10 @@ export const useStore = create<Store>()(
           patchCurrent((p) => {
             const keep = p.players.filter((pl) => pl.team !== team)
             const removed = new Set(p.players.filter((pl) => pl.team === team).map((pl) => pl.id))
-            const dx = (p.ballX ?? FIELD.BALL_X) - FIELD.BALL_X
             return {
               ...p,
               [team === 'O' ? 'offFormation' : 'defFormation']: name,
-              players: [...keep, ...shiftX(def.players(), dx)],
+              players: [...keep, ...spotPlayers(def.players(), p.ballX ?? FIELD.BALL_X)],
               routes: p.routes.filter((r) => !removed.has(r.playerId)),
             }
           })
@@ -193,16 +193,16 @@ export const useStore = create<Store>()(
         setBallSpot: (x) => {
           const play = current()
           if (!play) return
-          const dx = x - (play.ballX ?? FIELD.BALL_X)
-          if (dx === 0) return
+          const from = play.ballX ?? FIELD.BALL_X
+          if (x === from) return
           get().commit()
           patchCurrent((p) => ({
             ...p,
             ballX: x,
-            players: shiftX(p.players, dx),
+            players: p.players.map((pl) => ({ ...pl, x: respot(pl.x, from, x) })),
             routes: p.routes.map((r) => ({
               ...r,
-              points: r.points.map((pt) => ({ x: pt.x + dx, y: pt.y })),
+              points: r.points.map((pt) => ({ x: respot(pt.x, from, x), y: pt.y })),
             })),
           }))
         },

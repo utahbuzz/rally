@@ -17,7 +17,9 @@ import { z } from 'zod'
 import { FIELD, HASH_SPOTS, hashIdForX, Play, Player, Point, Route, ROUTE_COLORS, uid } from '../src/types'
 import { DEFENSE_FORMATIONS, OFFENSE_FORMATIONS, findFormation } from '../src/data/formations'
 import { QUICK_ROUTES, QUICK_ASSIGNMENTS, materializeQuickRoute } from '../src/data/routeTree'
+import { spotFromMid } from '../src/utils/field'
 import { playToSvg } from './renderSvg'
+import { findPackFormation, loadTeamPack, packFormationPlayers } from './teamPack'
 
 const PLAYBOOK_PATH = resolve(process.env.PLAYCALLER_PLAYBOOK ?? 'playcaller-playbook.json')
 
@@ -166,7 +168,23 @@ server.registerTool(
     const def = DEFENSE_FORMATIONS.map(
       (f) => `- "${f.name}" — players: ${f.players().map((p) => p.label).join(', ')}`,
     ).join('\n')
-    return text(`OFFENSE:\n${off}\n\nDEFENSE (optional, for scout looks):\n${def}`)
+
+    const pack = loadTeamPack()
+    let packSection = ''
+    if (pack) {
+      const lines = pack.formations
+        .map(
+          (f) =>
+            `- "${f.name}"${f.confirmed === false ? ' (alignment inferred — confirm with staff)' : ''} — players: ${f.players.map((p) => p.label.toUpperCase()).join(', ')}`,
+        )
+        .join('\n')
+      packSection = `\n\n${pack.team.toUpperCase()} TEAM PACK — prefer these when working for this program:\n${lines}`
+      if (pack.needs_alignment?.length) {
+        packSection += `\n\nNamed in their playbook but no alignment on file yet (ask the staff, or build with create_custom_play): ${pack.needs_alignment.join(', ')}`
+      }
+    }
+
+    return text(`OFFENSE:\n${off}\n\nDEFENSE (optional, for scout looks):\n${def}${packSection}`)
   },
 )
 
@@ -304,10 +322,14 @@ server.registerTool(
     },
   },
   async ({ name, offense_formation, defense_formation, hash, tags, notes, assignments }) => {
-    const off = findFormation('O', offense_formation)
-    if (!off) {
+    const spot0 = hashSpot(hash)
+    const packForm = findPackFormation(offense_formation)
+    const off = packForm ? undefined : findFormation('O', offense_formation)
+    if (!off && !packForm) {
+      const pack = loadTeamPack()
+      const packNames = pack ? `, or from the ${pack.team} pack: ${pack.formations.map((f) => f.name).join(', ')}` : ''
       return text(
-        `Unknown offensive formation "${offense_formation}". Valid: ${OFFENSE_FORMATIONS.map((f) => f.name).join(', ')}`,
+        `Unknown offensive formation "${offense_formation}". Valid: ${OFFENSE_FORMATIONS.map((f) => f.name).join(', ')}${packNames}`,
       )
     }
     const def = defense_formation ? findFormation('D', defense_formation) : undefined
@@ -317,18 +339,21 @@ server.registerTool(
       )
     }
 
-    const spot = hashSpot(hash)
-    const players = [...off.players(), ...(def ? def.players() : [])].map((p) => ({
-      ...p,
-      x: p.x + spot.dx,
-    }))
+    const spot = spot0
+    const offPlayers = packForm
+      ? packFormationPlayers(packForm, spot.x)
+      : off!.players().map((p) => ({ ...p, x: spotFromMid(p.x, spot.x) }))
+    const players = [
+      ...offPlayers,
+      ...(def ? def.players().map((p) => ({ ...p, x: spotFromMid(p.x, spot.x) })) : []),
+    ]
     const { routes, problems } = buildRoutes(players, assignments, spot.x)
 
     const play: Play = {
       id: uid(),
       name,
       ballX: spot.x,
-      offFormation: off.name,
+      offFormation: packForm ? packForm.name : off!.name,
       defFormation: def?.name ?? '',
       tags: tags ?? [],
       notes: notes ?? '',
@@ -341,7 +366,7 @@ server.registerTool(
 
     const warn = problems.length ? `\nWarnings: ${problems.join('; ')}` : ''
     return text(
-      `Created "${name}" (${off.name}${def ? ` vs ${def.name}` : ''}${hash && hash !== 'MOF' ? `, ${hash} hash` : ''}) with ${routes.length} assignments. Playbook now has ${count} play(s) in ${storeLabel}.${warn}`,
+      `Created "${name}" (${packForm ? packForm.name : off!.name}${def ? ` vs ${def.name}` : ''}${hash && hash !== 'MOF' ? `, ${hash} hash` : ''}) with ${routes.length} assignments. Playbook now has ${count} play(s) in ${storeLabel}.${warn}`,
     )
   },
 )
@@ -385,7 +410,7 @@ server.registerTool(
       id: uid(),
       team: p.team,
       label: p.label.toUpperCase(),
-      x: Math.min(Math.max(p.x_yards * 10 + spot.dx, 8), FIELD.W - 8),
+      x: Math.min(Math.max(spotFromMid(p.x_yards * 10, spot.x), 8), FIELD.W - 8),
       y:
         p.team === 'O'
           ? Math.min(FIELD.LOS + 10 + p.depth_yards * 10, FIELD.H - 10)
@@ -427,6 +452,31 @@ server.registerTool(
         `${i + 1}. ${p.name} — ${p.offFormation || 'Custom'}${p.defFormation ? ` vs ${p.defFormation}` : ''}${p.tags.length ? ` [${p.tags.join(', ')}]` : ''}${p.notes ? ` — ${p.notes.slice(0, 90)}` : ''}`,
     )
     return text(`${plays.length} play(s) in ${storeLabel}:\n${lines.join('\n')}`)
+  },
+)
+
+server.registerTool(
+  'team_terminology',
+  {
+    title: 'Team terminology',
+    description:
+      "Get the loaded program's call grammar and vocabulary — how their calls are worded, their protections, run series and pass concepts. Read this before naming or designing plays for that program so the output matches their playbook instead of generic football language.",
+  },
+  async () => {
+    const pack = loadTeamPack()
+    if (!pack) {
+      return text(
+        'No team pack loaded. Set PLAYCALLER_TEAM_PACK to a pack file to teach this server a program\'s formations and terminology.',
+      )
+    }
+    const parts = [`TEAM: ${pack.team}`]
+    if (pack.call_grammar) parts.push(`\nCALL GRAMMAR:\n${pack.call_grammar}`)
+    if (pack.notes) parts.push(`\nNOTES:\n${pack.notes}`)
+    for (const [heading, items] of Object.entries(pack.terminology ?? {})) {
+      parts.push(`\n${heading.toUpperCase()}:\n${items.join(', ')}`)
+    }
+    parts.push(`\nFORMATIONS: ${pack.formations.map((f) => f.name).join(', ')}`)
+    return text(parts.join('\n'))
   },
 )
 
@@ -522,4 +572,7 @@ server.registerTool(
 
 const transport = new StdioServerTransport()
 await server.connect(transport)
-console.error(`Playcaller MCP server running (${CLOUD ? 'cloud' : 'file'} mode, playbook: ${storeLabel})`)
+const loadedPack = loadTeamPack()
+console.error(
+  `Playcaller MCP server running (${CLOUD ? 'cloud' : 'file'} mode, playbook: ${storeLabel}${loadedPack ? `, team pack: ${loadedPack.team}` : ''})`,
+)

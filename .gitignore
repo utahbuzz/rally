@@ -1,3 +1,7 @@
 node_modules/
 dist/
 *.local
+
+# team packs hold a program's own formations and terminology - keep private
+*-pack.json
+team-packs/

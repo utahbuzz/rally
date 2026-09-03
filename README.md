@@ -70,6 +70,32 @@ share link (click the "☁ Synced" chip to copy it) and the MCP server writes
 straight to that cloud playbook — plays appear in the open app live, no
 import step.
 
+**Team packs:** point `PLAYCALLER_TEAM_PACK` at a pack file and the server
+learns a program's own formations and call grammar, so generated plays read
+like their playbook ("Gun Trey Open Right Rod Michigan") instead of generic
+football. `team_terminology` returns their protections, run series and pass
+concepts; `list_formations` adds their sets, flagging any whose alignment
+was inferred rather than supplied. Pack files are gitignored — a playbook is
+the program's IP and does not belong in this public repo.
+
+```json
+{
+  "team": "Example HS",
+  "call_grammar": "Formation + Direction + Protection + Concept",
+  "terminology": { "Protections": ["Solo", "Rip/Liz"] },
+  "formations": [
+    { "name": "Gun Trey Right", "confirmed": false,
+      "players": [{ "label": "C", "x_yards": 26.65, "depth_yards": 0 }] }
+  ],
+  "needs_alignment": ["Gun Dallas Right"]
+}
+```
+
+**Hashes:** plays record where the ball is spotted (L / LM / MOF / RM / R,
+the notation practice scripts use). The box travels with the ball while
+detached receivers compress into the boundary and widen to the field, the
+way alignments actually work — see `src/utils/field.ts`.
+
 **Scout cards:** `create_custom_play` places every player explicitly, so
 Claude can draw any opponent look — Wing-T, double wing, flexbone,
 unbalanced lines — with pulling guards, ball-carrier paths, and blocking

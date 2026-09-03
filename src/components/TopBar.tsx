@@ -1,8 +1,42 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { Play } from '../types'
 import { DEFENSE_FORMATIONS, OFFENSE_FORMATIONS } from '../data/formations'
+import { getShareUrl, onSyncStatus, SyncStatus } from '../sync'
 import { exportCurrentPlayPNG, exportPlaybookJSON, parsePlaybookJSON } from '../utils/export'
+
+function SyncChip() {
+  const [status, setStatus] = useState<SyncStatus>('local')
+  const [copied, setCopied] = useState(false)
+  useEffect(() => onSyncStatus(setStatus), [])
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(getShareUrl())
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch {
+      prompt('Copy your playbook link:', getShareUrl())
+    }
+  }
+
+  if (status === 'local') {
+    return (
+      <span className="sync-chip local" title="Cloud sync unavailable — plays are saved in this browser only">
+        Local
+      </span>
+    )
+  }
+  return (
+    <button
+      className="sync-chip cloud"
+      onClick={copyLink}
+      title="Synced to the cloud. Click to copy your playbook link — open it on any device (or hand it to the AI) to work on the same playbook."
+    >
+      {copied ? 'Link copied!' : status === 'syncing' ? 'Saving…' : '☁ Synced'}
+    </button>
+  )
+}
 
 export function TopBar({ play }: { play: Play }) {
   const s = useStore.getState
@@ -76,6 +110,8 @@ export function TopBar({ play }: { play: Play }) {
       </div>
 
       <div className="topbar-right">
+        <SyncChip />
+        <span className="divider" />
         <button className="btn ghost" disabled={!canUndo} onClick={() => s().undo()} title="Undo (Ctrl+Z)">
           ↩
         </button>

@@ -145,6 +145,31 @@ select {
   gap: 6px;
 }
 
+.sync-chip {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.sync-chip.local {
+  background: var(--panel-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.sync-chip.cloud {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.sync-chip.cloud:hover {
+  border-color: var(--accent);
+}
+
 .divider {
   width: 1px;
   height: 22px;

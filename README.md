@@ -65,9 +65,34 @@ The playbook file defaults to `./playcaller-playbook.json`; set
 `PLAYCALLER_PLAYBOOK` to change it. `npm run test:mcp` runs an end-to-end
 test that drives the server the way a client would.
 
-Roadmap: Supabase sync (plays appear in the app live, remote MCP for
-claude.ai), then an in-app AI coordinator chat calling Claude with these
-same tools.
+**Cloud mode:** set `PLAYCALLER_PLAYBOOK_ID` to the UUID from the app's
+share link (click the "☁ Synced" chip to copy it) and the MCP server writes
+straight to that cloud playbook — plays appear in the open app live, no
+import step.
+
+**Scout cards:** `create_custom_play` places every player explicitly, so
+Claude can draw any opponent look — Wing-T, double wing, flexbone,
+unbalanced lines — with pulling guards, ball-carrier paths, and blocking
+assignments. Combined with uploaded opponent film breakdowns, this powers
+weekly game-plan installs and scout-team card packs.
+
+## Cloud sync & hosting
+
+Plays sync through Supabase using a share-link capability model: the
+playbook UUID is the secret; the `playcaller_plays` table has RLS enabled
+with no policies, and all access goes through `security definer` RPCs
+(`supabase/migrations/`). The app pulls on load, pushes debounced, and
+listens on a realtime broadcast channel (30s poll as fallback); with no
+network it silently stays local-only.
+
+The production app is served by the `playcaller` edge function
+(`supabase/functions/playcaller/`), which proxies the committed single-file
+build from `hosting/index.html` — deploying a new version is just a git
+push.
+
+Roadmap: an in-app AI coordinator chat calling Claude with the same MCP
+tools, opponent-data ingestion for tendency analysis, and generated install
+sheets / call sheets / practice scripts.
 
 ## Develop
 

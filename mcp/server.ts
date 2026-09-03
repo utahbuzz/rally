@@ -12,12 +12,51 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { createClient, RealtimeChannel, SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { FIELD, Play, Point, Route, ROUTE_COLORS, uid } from '../src/types'
+import { FIELD, Play, Player, Point, Route, ROUTE_COLORS, uid } from '../src/types'
 import { DEFENSE_FORMATIONS, OFFENSE_FORMATIONS, findFormation } from '../src/data/formations'
 import { QUICK_ROUTES, QUICK_ASSIGNMENTS, materializeQuickRoute } from '../src/data/routeTree'
 
 const PLAYBOOK_PATH = resolve(process.env.PLAYCALLER_PLAYBOOK ?? 'playcaller-playbook.json')
+
+// Cloud mode: set PLAYCALLER_PLAYBOOK_ID (the uuid from the app's share link)
+// and plays go straight to the coach's cloud playbook — the open app updates
+// live. Without it, plays are written to the local JSON file above.
+const PLAYBOOK_ID = process.env.PLAYCALLER_PLAYBOOK_ID ?? ''
+const SUPA_URL = process.env.SUPABASE_URL ?? 'https://vxvsmmpriqkkkshgnqhh.supabase.co'
+const SUPA_KEY = process.env.SUPABASE_ANON_KEY ?? 'sb_publishable_WRhDxUgk24aB6-JF-dMLfw_GV3noVnx'
+const CLOUD = /^[0-9a-f-]{36}$/i.test(PLAYBOOK_ID)
+
+let sb: SupabaseClient | null = null
+let syncChannel: RealtimeChannel | null = null
+
+function cloud(): SupabaseClient {
+  if (!sb) sb = createClient(SUPA_URL, SUPA_KEY)
+  return sb
+}
+
+/** Nudge any open Playcaller app on this playbook to re-pull. Best-effort. */
+async function pingApps(): Promise<void> {
+  try {
+    if (!syncChannel) {
+      const ch = cloud().channel(`pb:${PLAYBOOK_ID}`)
+      await new Promise<void>((res) => {
+        const timer = setTimeout(res, 3000)
+        ch.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            clearTimeout(timer)
+            res()
+          }
+        })
+      })
+      syncChannel = ch
+    }
+    await syncChannel.send({ type: 'broadcast', event: 'sync', payload: { from: 'mcp' } })
+  } catch {
+    // the app's fallback poll picks the change up anyway
+  }
+}
 
 const COLOR_NAMES: Record<string, string> = {
   red: ROUTE_COLORS[0],
@@ -30,7 +69,14 @@ const COLOR_NAMES: Record<string, string> = {
 
 const ALL_TEMPLATES = [...QUICK_ROUTES, ...QUICK_ASSIGNMENTS]
 
-function loadPlaybook(): Play[] {
+const storeLabel = CLOUD ? `cloud playbook ${PLAYBOOK_ID}` : PLAYBOOK_PATH
+
+async function loadPlaybook(): Promise<Play[]> {
+  if (CLOUD) {
+    const { data, error } = await cloud().rpc('playcaller_get_plays', { pbid: PLAYBOOK_ID })
+    if (error) throw new Error(`cloud read failed: ${error.message}`)
+    return (data ?? []) as Play[]
+  }
   if (!existsSync(PLAYBOOK_PATH)) return []
   try {
     const data = JSON.parse(readFileSync(PLAYBOOK_PATH, 'utf8'))
@@ -40,7 +86,37 @@ function loadPlaybook(): Play[] {
   }
 }
 
-function savePlaybook(plays: Play[]): void {
+/** Add one play; returns the new playbook size. */
+async function addPlay(play: Play): Promise<number> {
+  if (CLOUD) {
+    const { error } = await cloud().rpc('playcaller_put_play', { pbid: PLAYBOOK_ID, play })
+    if (error) throw new Error(`cloud write failed: ${error.message}`)
+    await pingApps()
+    return (await loadPlaybook()).length
+  }
+  const plays = await loadPlaybook()
+  plays.unshift(play)
+  savePlaybookFile(plays)
+  return plays.length
+}
+
+/** Remove a play by name; returns remaining count, or null if not found. */
+async function removePlay(name: string): Promise<number | null> {
+  const plays = await loadPlaybook()
+  const target = plays.find((p) => p.name === name)
+  if (!target) return null
+  if (CLOUD) {
+    const { error } = await cloud().rpc('playcaller_delete_play', { pbid: PLAYBOOK_ID, play_id: target.id })
+    if (error) throw new Error(`cloud delete failed: ${error.message}`)
+    await pingApps()
+    return plays.length - 1
+  }
+  const next = plays.filter((p) => p.id !== target.id)
+  savePlaybookFile(next)
+  return next.length
+}
+
+function savePlaybookFile(plays: Play[]): void {
   const payload = { app: 'playcaller', version: 1, exportedAt: new Date().toISOString(), plays }
   writeFileSync(PLAYBOOK_PATH, JSON.stringify(payload, null, 2))
 }
@@ -117,6 +193,56 @@ server.registerTool(
   },
 )
 
+type AssignmentInput = {
+  player: string
+  route?: string
+  custom_path?: { x: number; y: number }[]
+  kind?: Route['kind']
+  color?: string
+}
+
+/** Materialize route assignments against a set of players (shared by both play tools). */
+function buildRoutes(players: Player[], assignments: AssignmentInput[]): { routes: Route[]; problems: string[] } {
+  const routes: Route[] = []
+  const problems: string[] = []
+  for (const a of assignments) {
+    const player =
+      players.find((p) => p.team === 'O' && p.label === a.player) ??
+      players.find((p) => p.label === a.player)
+    if (!player) {
+      problems.push(`no player labeled "${a.player}" in this play`)
+      continue
+    }
+    const color = COLOR_NAMES[(a.color ?? 'red').toLowerCase()] ?? ROUTE_COLORS[0]
+    let points: Point[]
+    let kind: Route['kind']
+    if (a.custom_path && a.custom_path.length > 0) {
+      const dir = player.team === 'O' ? -1 : 1
+      points = [
+        { x: player.x, y: player.y },
+        ...a.custom_path.map((p) => ({
+          x: Math.min(Math.max(player.x + p.x * 10, 6), FIELD.W - 6),
+          y: Math.min(Math.max(player.y + p.y * 10 * dir, 6), FIELD.H - 6),
+        })),
+      ]
+      kind = a.kind ?? 'route'
+    } else if (a.route) {
+      const template = ALL_TEMPLATES.find((t) => t.name.toLowerCase() === a.route!.toLowerCase())
+      if (!template) {
+        problems.push(`unknown route "${a.route}" for ${a.player} (see get_route_library)`)
+        continue
+      }
+      points = materializeQuickRoute(player, template)
+      kind = a.kind ?? template.kind
+    } else {
+      problems.push(`assignment for ${a.player} needs a route or custom_path`)
+      continue
+    }
+    routes.push({ id: uid(), playerId: player.id, kind, color, points })
+  }
+  return { routes, problems }
+}
+
 const assignmentSchema = z.object({
   player: z.string().describe('Player label from the formation, e.g. "X", "Z", "RB", "LT"'),
   route: z
@@ -169,46 +295,7 @@ server.registerTool(
     }
 
     const players = [...off.players(), ...(def ? def.players() : [])]
-    const routes: Route[] = []
-    const problems: string[] = []
-
-    for (const a of assignments) {
-      const player =
-        players.find((p) => p.team === 'O' && p.label === a.player) ??
-        players.find((p) => p.label === a.player)
-      if (!player) {
-        problems.push(`no player labeled "${a.player}" in this formation`)
-        continue
-      }
-      const color = COLOR_NAMES[(a.color ?? 'red').toLowerCase()] ?? ROUTE_COLORS[0]
-
-      let points: Point[]
-      let kind: Route['kind']
-      if (a.custom_path && a.custom_path.length > 0) {
-        // yards relative to player; +y upfield → negative field-y for offense
-        const dir = player.team === 'O' ? -1 : 1
-        points = [
-          { x: player.x, y: player.y },
-          ...a.custom_path.map((p) => ({
-            x: Math.min(Math.max(player.x + p.x * 10, 6), FIELD.W - 6),
-            y: Math.min(Math.max(player.y + p.y * 10 * dir, 6), FIELD.H - 6),
-          })),
-        ]
-        kind = a.kind ?? 'route'
-      } else if (a.route) {
-        const template = ALL_TEMPLATES.find((t) => t.name.toLowerCase() === a.route!.toLowerCase())
-        if (!template) {
-          problems.push(`unknown route "${a.route}" for ${a.player} (see get_route_library)`)
-          continue
-        }
-        points = materializeQuickRoute(player, template)
-        kind = a.kind ?? template.kind
-      } else {
-        problems.push(`assignment for ${a.player} needs a route or custom_path`)
-        continue
-      }
-      routes.push({ id: uid(), playerId: player.id, kind, color, points })
-    }
+    const { routes, problems } = buildRoutes(players, assignments)
 
     const play: Play = {
       id: uid(),
@@ -222,13 +309,70 @@ server.registerTool(
       updatedAt: Date.now(),
     }
 
-    const plays = loadPlaybook()
-    plays.unshift(play)
-    savePlaybook(plays)
+    const count = await addPlay(play)
 
     const warn = problems.length ? `\nWarnings: ${problems.join('; ')}` : ''
     return text(
-      `Created "${name}" (${off.name}${def ? ` vs ${def.name}` : ''}) with ${routes.length} assignments. Playbook now has ${plays.length} play(s) at ${PLAYBOOK_PATH}.${warn}`,
+      `Created "${name}" (${off.name}${def ? ` vs ${def.name}` : ''}) with ${routes.length} assignments. Playbook now has ${count} play(s) in ${storeLabel}.${warn}`,
+    )
+  },
+)
+
+server.registerTool(
+  'create_custom_play',
+  {
+    title: 'Create a play with custom player placement',
+    description:
+      'Create a play placing every player yourself — for opponent scout cards and schemes the formation library does not cover (Wing-T, double wing, flexbone, unbalanced lines, odd fronts…). Place 11 players per side you use. The ball is at x 26.65 yd; the field is 53.3 yd wide. Typical offensive line: C at x 26.65, guards ±2.4 yd, tackles ±4.8 yd, all at depth 1.2. Assignments work exactly like create_play (route names or custom_path), so you can draw run schemes with blocks and ball-carrier paths.',
+    inputSchema: {
+      name: z.string(),
+      tags: z.array(z.string()).optional().describe('e.g. ["Scout", "Opponent Run Game"]'),
+      notes: z.string().optional(),
+      players: z
+        .array(
+          z.object({
+            label: z.string().max(3).describe('1-3 chars shown on the diagram, e.g. "QB", "WB", "E"'),
+            team: z.enum(['O', 'D']),
+            x_yards: z.number().min(0).max(53.3).describe('Distance from the LEFT sideline in yards (ball is at 26.65)'),
+            depth_yards: z
+              .number()
+              .min(0)
+              .max(13)
+              .describe('Distance from the line of scrimmage in yards — offense sets up behind it, defense in front'),
+          }),
+        )
+        .describe('Every player to draw, both teams as needed'),
+      assignments: z.array(assignmentSchema).optional().describe('Routes/blocks, same format as create_play'),
+    },
+  },
+  async ({ name, tags, notes, players: placed, assignments }) => {
+    const players: Player[] = placed.map((p) => ({
+      id: uid(),
+      team: p.team,
+      label: p.label.toUpperCase(),
+      x: Math.min(Math.max(p.x_yards * 10, 8), FIELD.W - 8),
+      y:
+        p.team === 'O'
+          ? Math.min(FIELD.LOS + 10 + p.depth_yards * 10, FIELD.H - 10)
+          : Math.max(FIELD.LOS - 12 - p.depth_yards * 10, 10),
+      shape: p.team === 'D' ? 'text' : p.label.toUpperCase() === 'C' ? 'square' : 'circle',
+    }))
+    const { routes, problems } = buildRoutes(players, assignments ?? [])
+    const play: Play = {
+      id: uid(),
+      name,
+      offFormation: 'Custom',
+      defFormation: '',
+      tags: tags ?? [],
+      notes: notes ?? '',
+      players,
+      routes,
+      updatedAt: Date.now(),
+    }
+    const count = await addPlay(play)
+    const warn = problems.length ? `\nWarnings: ${problems.join('; ')}` : ''
+    return text(
+      `Created custom play "${name}" with ${players.length} players and ${routes.length} assignments. Playbook now has ${count} play(s) in ${storeLabel}.${warn}`,
     )
   },
 )
@@ -240,13 +384,13 @@ server.registerTool(
     description: 'List the plays currently in the Playcaller playbook file.',
   },
   async () => {
-    const plays = loadPlaybook()
-    if (!plays.length) return text(`Playbook is empty (${PLAYBOOK_PATH}).`)
+    const plays = await loadPlaybook()
+    if (!plays.length) return text(`Playbook is empty (${storeLabel}).`)
     const lines = plays.map(
       (p, i) =>
         `${i + 1}. ${p.name} — ${p.offFormation || 'Custom'}${p.defFormation ? ` vs ${p.defFormation}` : ''}${p.tags.length ? ` [${p.tags.join(', ')}]` : ''}`,
     )
-    return text(`${plays.length} play(s) in ${PLAYBOOK_PATH}:\n${lines.join('\n')}`)
+    return text(`${plays.length} play(s) in ${storeLabel}:\n${lines.join('\n')}`)
   },
 )
 
@@ -258,14 +402,12 @@ server.registerTool(
     inputSchema: { name: z.string() },
   },
   async ({ name }) => {
-    const plays = loadPlaybook()
-    const next = plays.filter((p) => p.name !== name)
-    if (next.length === plays.length) return text(`No play named "${name}" found.`)
-    savePlaybook(next)
-    return text(`Deleted "${name}". ${next.length} play(s) remain.`)
+    const remaining = await removePlay(name)
+    if (remaining === null) return text(`No play named "${name}" found.`)
+    return text(`Deleted "${name}". ${remaining} play(s) remain.`)
   },
 )
 
 const transport = new StdioServerTransport()
 await server.connect(transport)
-console.error(`Playcaller MCP server running (playbook: ${PLAYBOOK_PATH})`)
+console.error(`Playcaller MCP server running (${CLOUD ? 'cloud' : 'file'} mode, playbook: ${storeLabel})`)

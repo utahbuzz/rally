@@ -11,13 +11,18 @@
  *   2. otherwise the x-anthropic-key header, which the app fills from a key
  *      the coach pastes into the panel (kept in their browser)
  *
+ * Identity-linked keys additionally require naming the workspace the request
+ * acts in, so a workspace id from ANTHROPIC_WORKSPACE_ID or the
+ * x-anthropic-workspace header is forwarded as anthropic-workspace-id.
+ *
  * NOTE: this endpoint is public (no JWT). Setting the project secret means
  * anyone with the URL can spend those API credits, so prefer the per-user
  * key unless the URL stays inside a controlled group.
  */
 const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'authorization, apikey, content-type, x-anthropic-key',
+  'access-control-allow-headers':
+    'authorization, apikey, content-type, x-anthropic-key, x-anthropic-workspace',
   'access-control-allow-methods': 'POST, OPTIONS',
 }
 
@@ -39,6 +44,9 @@ Deno.serve(async (req) => {
     )
   }
 
+  const workspace =
+    Deno.env.get('ANTHROPIC_WORKSPACE_ID') ?? req.headers.get('x-anthropic-workspace') ?? ''
+
   let body: unknown
   try {
     body = await req.json()
@@ -53,6 +61,7 @@ Deno.serve(async (req) => {
         'content-type': 'application/json',
         'x-api-key': key,
         'anthropic-version': '2023-06-01',
+        ...(workspace ? { 'anthropic-workspace-id': workspace } : {}),
       },
       body: JSON.stringify(body),
     })

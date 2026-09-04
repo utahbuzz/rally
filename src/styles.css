@@ -1058,3 +1058,9 @@ select {
     position: relative;
   }
 }
+
+.coach-head-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}

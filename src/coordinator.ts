@@ -22,6 +22,7 @@ import { OFFENSE_FORMATIONS, DEFENSE_FORMATIONS } from './data/formations'
 
 const PROXY_URL = `${SUPABASE_URL}/functions/v1/claude-proxy`
 const KEY_STORAGE = 'playcaller-anthropic-key'
+const WORKSPACE_STORAGE = 'playcaller-anthropic-workspace'
 const MODEL = 'claude-opus-5'
 
 export function getApiKey(): string {
@@ -38,6 +39,27 @@ export function setApiKey(key: string): void {
     else window.localStorage.removeItem(KEY_STORAGE)
   } catch {
     /* private browsing — the key just won't persist */
+  }
+}
+
+/**
+ * Identity-linked API keys must name the workspace each request acts in.
+ * Standard keys don't need this, so it stays optional.
+ */
+export function getWorkspaceId(): string {
+  try {
+    return window.localStorage.getItem(WORKSPACE_STORAGE) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function setWorkspaceId(id: string): void {
+  try {
+    if (id) window.localStorage.setItem(WORKSPACE_STORAGE, id)
+    else window.localStorage.removeItem(WORKSPACE_STORAGE)
+  } catch {
+    /* not persisted in private browsing */
   }
 }
 
@@ -158,6 +180,7 @@ function runTool(name: string, input: Record<string, never>): { text: string; cr
 
 async function callClaude(messages: ApiMessage[]): Promise<Record<string, unknown>> {
   const key = getApiKey()
+  const workspace = getWorkspaceId()
   const res = await fetch(PROXY_URL, {
     method: 'POST',
     headers: {
@@ -165,6 +188,7 @@ async function callClaude(messages: ApiMessage[]): Promise<Record<string, unknow
       apikey: SUPABASE_KEY,
       authorization: `Bearer ${SUPABASE_KEY}`,
       ...(key ? { 'x-anthropic-key': key } : {}),
+      ...(workspace ? { 'x-anthropic-workspace': workspace } : {}),
     },
     body: JSON.stringify({
       model: MODEL,

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { askCoordinator, ChatTurn, getApiKey, setApiKey } from '../coordinator'
+import {
+  askCoordinator,
+  ChatTurn,
+  getApiKey,
+  getWorkspaceId,
+  setApiKey,
+  setWorkspaceId,
+} from '../coordinator'
 
 const SUGGESTIONS = [
   '5 plays to beat Cover 2 on 3rd and 6',
@@ -8,14 +15,18 @@ const SUGGESTIONS = [
   '4 quick game answers vs a blitz',
 ]
 
+/** The API rejects identity-linked keys that do not name a workspace. */
+const WORKSPACE_ERROR = /workspace/i
+
 export function Coordinator({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [turns, setTurns] = useState<ChatTurn[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
-  const [keyInput, setKeyInput] = useState('')
-  const [hasKey, setHasKey] = useState(() => !!getApiKey())
+  const [setupOpen, setSetupOpen] = useState(() => !getApiKey())
+  const [keyInput, setKeyInput] = useState(() => getApiKey())
+  const [wsInput, setWsInput] = useState(() => getWorkspaceId())
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -34,11 +45,21 @@ export function Coordinator({ open, onClose }: { open: boolean; onClose: () => v
       const reply = await askCoordinator(history, question, setNote)
       setTurns((t) => [...t, reply])
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong')
+      const message = e instanceof Error ? e.message : 'Something went wrong'
+      setError(message)
+      // a missing workspace id is fixable right here — open the settings
+      if (WORKSPACE_ERROR.test(message) && !getWorkspaceId()) setSetupOpen(true)
     } finally {
       setBusy(false)
       setNote('')
     }
+  }
+
+  const saveSettings = () => {
+    setApiKey(keyInput.trim())
+    setWorkspaceId(wsInput.trim())
+    setError('')
+    setSetupOpen(false)
   }
 
   if (!open) return null
@@ -50,17 +71,27 @@ export function Coordinator({ open, onClose }: { open: boolean; onClose: () => v
           <div className="coach-title">Coach AI</div>
           <div className="coach-sub">Ask for plays — they draw straight into your playbook</div>
         </div>
-        <button className="coach-close" onClick={onClose} title="Close">
-          ✕
-        </button>
+        <div className="coach-head-actions">
+          <button
+            className="coach-close"
+            onClick={() => setSetupOpen((v) => !v)}
+            title="API key and workspace settings"
+          >
+            ⚙
+          </button>
+          <button className="coach-close" onClick={onClose} title="Close">
+            ✕
+          </button>
+        </div>
       </header>
 
-      {!hasKey ? (
+      {setupOpen ? (
         <div className="coach-setup">
           <p className="hint">
-            Coach AI runs on Claude. Paste an Anthropic API key to enable it — it is stored in this
-            browser only and sent straight to Anthropic through your own Supabase function.
+            Coach AI runs on Claude. Paste an Anthropic API key — it is stored in this browser only
+            and goes straight to Anthropic through your own Supabase function.
           </p>
+          <label className="field-label">API key</label>
           <input
             className="text-input"
             type="password"
@@ -68,21 +99,23 @@ export function Coordinator({ open, onClose }: { open: boolean; onClose: () => v
             value={keyInput}
             onChange={(e) => setKeyInput(e.target.value)}
           />
-          <button
-            className="btn primary block"
-            onClick={() => {
-              setApiKey(keyInput.trim())
-              setHasKey(!!keyInput.trim())
-            }}
-          >
-            Enable Coach AI
-          </button>
+          <label className="field-label">Workspace ID (only for identity-linked keys)</label>
+          <input
+            className="text-input"
+            placeholder="wrkspc_…"
+            value={wsInput}
+            onChange={(e) => setWsInput(e.target.value)}
+          />
           <p className="hint">
-            Get a key at console.anthropic.com. If your Supabase project already has an
-            ANTHROPIC_API_KEY secret set, Coach AI works without pasting anything.
+            Leave this blank for a standard key. If you see "anthropic-workspace-id is required",
+            your key is identity-linked — copy its workspace ID from the Anthropic Console under
+            Settings → Workspaces and paste it here.
           </p>
-          <button className="btn ghost block" onClick={() => setHasKey(true)}>
-            Skip — a key is already set on the server
+          <button className="btn primary block" onClick={saveSettings}>
+            Save
+          </button>
+          <button className="btn ghost block" onClick={() => setSetupOpen(false)}>
+            {getApiKey() ? 'Cancel' : 'Skip — a key is already set on the server'}
           </button>
         </div>
       ) : (

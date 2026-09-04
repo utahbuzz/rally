@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import { PlaySVG } from './PlayGraphics'
 
 export function Sidebar() {
+  const display = useStore((s) => s.display)
   const plays = useStore((s) => s.plays)
   const currentId = useStore((s) => s.currentId)
   const s = useStore.getState
@@ -65,7 +66,7 @@ export function Sidebar() {
             onClick={() => s().selectPlay(p.id)}
           >
             <div className="thumb">
-              <PlaySVG play={p} />
+              <PlaySVG play={p} display={display} />
             </div>
             <div className="play-meta">
               <div className="play-title">{p.name}</div>

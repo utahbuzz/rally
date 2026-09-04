@@ -14,10 +14,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createClient, RealtimeChannel, SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { FIELD, HASH_SPOTS, hashIdForX, Play, Player, Point, Route, ROUTE_COLORS, uid } from '../src/types'
+import { FIELD, HASH_SPOTS, hashIdForX, MARKER_COLORS, Play, Player, Point, Route, ROUTE_COLORS, uid } from '../src/types'
 import { DEFENSE_FORMATIONS, OFFENSE_FORMATIONS, findFormation } from '../src/data/formations'
 import { QUICK_ROUTES, QUICK_ASSIGNMENTS, materializeQuickRoute } from '../src/data/routeTree'
-import { spotFromMid } from '../src/utils/field'
+import { compressDepth, expandDepth, spotFromMid } from '../src/utils/field'
 import { COVERAGE_GUIDE, coverageGuide } from '../src/data/coverages'
 import { playToSvg } from './renderSvg'
 import { findPackFormation, loadTeamPack, packFormationPlayers } from './teamPack'
@@ -226,6 +226,7 @@ function buildRoutes(
   players: Player[],
   assignments: AssignmentInput[],
   ballX: number = FIELD.BALL_X,
+  yardsToGoal?: number,
 ): { routes: Route[]; problems: string[] } {
   const routes: Route[] = []
   const problems: string[] = []
@@ -246,7 +247,10 @@ function buildRoutes(
         { x: player.x, y: player.y },
         ...a.custom_path.map((p) => ({
           x: Math.min(Math.max(player.x + p.x * 10, 6), FIELD.W - 6),
-          y: Math.min(Math.max(player.y + p.y * 10 * dir, 6), FIELD.H - 6),
+          y: compressDepth(
+            Math.min(Math.max(expandDepth(player.y, yardsToGoal) + p.y * 10 * dir, 6), FIELD.H - 6),
+            yardsToGoal,
+          ),
         })),
       ]
       kind = a.kind ?? 'route'
@@ -256,7 +260,7 @@ function buildRoutes(
         problems.push(`unknown route "${a.route}" for ${a.player} (see get_route_library)`)
         continue
       }
-      points = materializeQuickRoute(player, template, ballX)
+      points = materializeQuickRoute(player, template, ballX, yardsToGoal)
       kind = a.kind ?? template.kind
     } else {
       problems.push(`assignment for ${a.player} needs a route or custom_path`)
@@ -266,6 +270,15 @@ function buildRoutes(
   }
   return { routes, problems }
 }
+
+const fieldPositionSchema = z
+  .number()
+  .min(1)
+  .max(99)
+  .optional()
+  .describe(
+    'Yards to the opponent goal line. 8 spots the ball at the +8: the end zone is drawn, there is no first-down marker (goal to go), and every route and defender compresses to fit the space in front of the ball. 90-99 backs the offense up to its own end. Omit for open field.',
+  )
 
 const assignmentSchema = z.object({
   player: z.string().describe('Player label from the formation, e.g. "X", "Z", "RB", "LT"'),
@@ -305,12 +318,13 @@ server.registerTool(
         .describe(
           'Ball spot across the field, using practice-script notation: L or R = hash, LM/RM = between hash and middle, MOF = middle (default). Moves the ball and the whole formation.',
         ),
+      field_position: fieldPositionSchema,
       tags: z.array(z.string()).optional().describe('e.g. ["Pass", "3rd Down", "vs Cover 2"]'),
       notes: z.string().optional().describe('Coaching notes: read progression, protection, keys'),
       assignments: z.array(assignmentSchema).describe('One entry per player who gets a route/block'),
     },
   },
-  async ({ name, offense_formation, defense_formation, hash, tags, notes, assignments }) => {
+  async ({ name, offense_formation, defense_formation, hash, field_position, tags, notes, assignments }) => {
     const spot0 = hashSpot(hash)
     const packForm = findPackFormation(offense_formation)
     const off = packForm ? undefined : findFormation('O', offense_formation)
@@ -335,13 +349,16 @@ server.registerTool(
     const players = [
       ...offPlayers,
       ...(def ? def.players().map((p) => ({ ...p, x: spotFromMid(p.x, spot.x) })) : []),
-    ]
-    const { routes, problems } = buildRoutes(players, assignments, spot.x)
+      // formations are defined at open-field depth; squeeze them into the
+      // space in front of the ball so nobody aligns past the back line
+    ].map((p) => ({ ...p, y: compressDepth(p.y, field_position) }))
+    const { routes, problems } = buildRoutes(players, assignments, spot.x, field_position)
 
     const play: Play = {
       id: uid(),
       name,
       ballX: spot.x,
+      yardsToGoal: field_position,
       offFormation: packForm ? packForm.name : off!.name,
       defFormation: def?.name ?? '',
       tags: tags ?? [],
@@ -355,7 +372,7 @@ server.registerTool(
 
     const warn = problems.length ? `\nWarnings: ${problems.join('; ')}` : ''
     return text(
-      `Created "${name}" (${packForm ? packForm.name : off!.name}${def ? ` vs ${def.name}` : ''}${hash && hash !== 'MOF' ? `, ${hash} hash` : ''}) with ${routes.length} assignments. Playbook now has ${count} play(s) in ${storeLabel}.${warn}`,
+      `Created "${name}" (${packForm ? packForm.name : off!.name}${def ? ` vs ${def.name}` : ''}${hash && hash !== 'MOF' ? `, ${hash} hash` : ''}${field_position ? `, ball on the ${field_position <= 50 ? `+${field_position}` : `own ${100 - field_position}`}` : ''}) with ${routes.length} assignments. Playbook now has ${count} play(s) in ${storeLabel}.${warn}`,
     )
   },
 )
@@ -374,6 +391,7 @@ server.registerTool(
         .describe(
           'Ball spot: L or R = hash, LM/RM = between hash and middle, MOF = middle (default). Place the players as if the ball were at midfield; the hash then shifts the whole picture.',
         ),
+      field_position: fieldPositionSchema,
       tags: z.array(z.string()).optional().describe('e.g. ["Scout", "Opponent Run Game"]'),
       notes: z.string().optional(),
       players: z
@@ -381,6 +399,16 @@ server.registerTool(
           z.object({
             label: z.string().max(3).describe('1-3 chars shown on the diagram, e.g. "QB", "WB", "E"'),
             team: z.enum(['O', 'D']),
+            shape: z
+              .enum(['circle', 'square', 'triangle', 'text'])
+              .optional()
+              .describe('Marker shape. Defaults to a circle for offense (square for the center) and a letter for defense.'),
+            fill: z
+              .string()
+              .optional()
+              .describe(
+                `Marker colour as a hex value, e.g. "#e11d48". Useful for scout cards — colour the scout offense so the defense can pick it out. Suggested: ${MARKER_COLORS.join(', ')}`,
+              ),
             x_yards: z.number().min(0).max(53.3).describe('Distance from the LEFT sideline in yards (ball is at 26.65)'),
             depth_yards: z
               .number()
@@ -393,24 +421,28 @@ server.registerTool(
       assignments: z.array(assignmentSchema).optional().describe('Routes/blocks, same format as create_play'),
     },
   },
-  async ({ name, hash, tags, notes, players: placed, assignments }) => {
+  async ({ name, hash, field_position, tags, notes, players: placed, assignments }) => {
     const spot = hashSpot(hash)
     const players: Player[] = placed.map((p) => ({
       id: uid(),
       team: p.team,
       label: p.label.toUpperCase(),
       x: Math.min(Math.max(spotFromMid(p.x_yards * 10, spot.x), 8), FIELD.W - 8),
-      y:
+      y: compressDepth(
         p.team === 'O'
           ? Math.min(FIELD.LOS + 10 + p.depth_yards * 10, FIELD.H - 10)
           : Math.max(FIELD.LOS - 12 - p.depth_yards * 10, 10),
-      shape: p.team === 'D' ? 'text' : p.label.toUpperCase() === 'C' ? 'square' : 'circle',
+        field_position,
+      ),
+      shape: p.shape ?? (p.team === 'D' ? 'text' : p.label.toUpperCase() === 'C' ? 'square' : 'circle'),
+      ...(p.fill ? { fill: p.fill } : {}),
     }))
-    const { routes, problems } = buildRoutes(players, assignments ?? [], spot.x)
+    const { routes, problems } = buildRoutes(players, assignments ?? [], spot.x, field_position)
     const play: Play = {
       id: uid(),
       name,
       ballX: spot.x,
+      yardsToGoal: field_position,
       offFormation: 'Custom',
       defFormation: '',
       tags: tags ?? [],

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { FIELD, Play, Point } from '../types'
 import { clampToField, roundedPath, snap45 } from '../utils/geometry'
-import { FieldBackground, PlayerGlyph, PLAYER_R, RouteGlyph } from './PlayGraphics'
+import { FieldBackground, playerNumbers, PlayerGlyph, PLAYER_R, RouteGlyph } from './PlayGraphics'
 
 type Drag =
   | { type: 'player'; id: string; last: Point }
@@ -19,6 +19,7 @@ export function Field({ play }: { play: Play }) {
   const drawing = useStore((s) => s.drawing)
   const selectedPlayerId = useStore((s) => s.selectedPlayerId)
   const selectedRouteId = useStore((s) => s.selectedRouteId)
+  const display = useStore((s) => s.display)
   const s = useStore.getState
 
   const toField = (e: { clientX: number; clientY: number }): Point => {
@@ -134,6 +135,7 @@ export function Field({ play }: { play: Play }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [s])
 
+  const numbers = playerNumbers(play.players)
   const selectedRoute = play.routes.find((r) => r.id === selectedRouteId)
   const drawingPlayer = drawing ? play.players.find((p) => p.id === drawing.playerId) : null
 
@@ -157,7 +159,7 @@ export function Field({ play }: { play: Play }) {
       onPointerUp={onUp}
       onDoubleClick={onDblClick}
     >
-      <FieldBackground ballX={play.ballX} />
+      <FieldBackground ballX={play.ballX} yardsToGoal={play.yardsToGoal} />
 
       {/* routes (fade others while drawing) */}
       {play.routes.map((r) => (
@@ -181,7 +183,12 @@ export function Field({ play }: { play: Play }) {
       {play.players.map((p) => (
         <g key={p.id} onPointerDown={(e) => onPlayerDown(e, p.id)} style={{ cursor: tool === 'select' ? 'grab' : 'crosshair' }}>
           <circle cx={p.x} cy={p.y} r={PLAYER_R + 4} fill="transparent" />
-          <PlayerGlyph player={p} selected={p.id === selectedPlayerId || p.id === drawingPlayer?.id} />
+          <PlayerGlyph
+            player={p}
+            selected={p.id === selectedPlayerId || p.id === drawingPlayer?.id}
+            display={display}
+            number={numbers[p.id]}
+          />
         </g>
       ))}
 

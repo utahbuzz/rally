@@ -100,6 +100,11 @@ const TOOLS = [
           enum: ['L', 'LM', 'MOF', 'RM', 'R'],
           description: 'Ball spot: L/R = hash, MOF = middle (default)',
         },
+        field_position: {
+          type: 'number',
+          description:
+            'Yards to the opponent goal line, for red-zone and goal-line work: 8 draws the play from the +8 with the end zone on screen and every route compressed to fit. Use 90-99 for backed-up plays from your own end. Omit for open field.',
+        },
         tags: { type: 'array', items: { type: 'string' } },
         notes: { type: 'string', description: 'Read progression, protection, coaching points' },
         assignments: {
@@ -134,6 +139,7 @@ function systemPrompt(): string {
     '- When asked for plays, actually draw them with create_play — do not just describe them.',
     '- Check coverage_guide first when a coverage or situation is named, and use what it says.',
     '- Vary formations and concepts across a set; do not draw the same play five times.',
+    '- In the red zone set field_position and pick concepts that live in that space (fade, slant, spot, snag, pick) — the field is short, so deep route trees do not belong there.',
     '- Name plays the way a coach calls them, and always fill in notes with the read.',
     '- Keep your replies to the coach short: a sentence or two on the plan, then the plays.',
     '',

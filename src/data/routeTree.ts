@@ -1,4 +1,5 @@
 import { FIELD, Player, Point, RouteKind } from '../types'
+import { compressDepth, expandDepth } from '../utils/field'
 
 /**
  * Quick routes are defined for a player on the RIGHT side of the ball,
@@ -40,11 +41,17 @@ export const QUICK_ASSIGNMENTS: QuickRoute[] = [
  * `ballX` is where the ball is spotted: routes mirror by which side of the
  * BALL the player is on, not the middle of the field, so the library still
  * reads correctly when a play is spotted on a hash.
+ *
+ * `yardsToGoal` is where the ball sits down the field. The route is built at
+ * its full open-field depth and then compressed into the space in front of
+ * the ball, so clicking "Go" at the +7 draws a fade that finishes in the end
+ * zone instead of one drawn off the top of the canvas.
  */
 export function materializeQuickRoute(
   player: Player,
   template: QuickRoute,
   ballX: number = FIELD.BALL_X,
+  yardsToGoal?: number,
 ): Point[] {
   const onRight = player.x >= ballX
   // Defenders attack downward (+y is toward the offense for them already,
@@ -53,9 +60,15 @@ export function materializeQuickRoute(
   const flipX = onRight ? 1 : -1
   // keep routes on the canvas — a wide receiver spotted on the boundary hash
   // would otherwise run its break clean off the field
+  // the template is drawn against open-field depth, so start from where this
+  // player would be standing there and compress the finished route back down
+  const baseY = expandDepth(player.y, yardsToGoal)
   const pts = template.points.map((p) => ({
     x: Math.min(Math.max(player.x + p.x * flipX, 6), FIELD.W - 6),
-    y: player.y + p.y * flipY,
+    y: baseY + p.y * flipY,
   }))
-  return [{ x: player.x, y: player.y }, ...pts]
+  return [{ x: baseY, y: baseY }, ...pts].map((p, i) => ({
+    x: i === 0 ? player.x : p.x,
+    y: compressDepth(p.y, yardsToGoal),
+  }))
 }

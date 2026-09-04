@@ -1,10 +1,23 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { FIELD, Play, Point, Route, RouteKind, ROUTE_COLORS, Team, Tool, uid } from './types'
+import {
+  DEFAULT_DISPLAY,
+  DisplaySettings,
+  FIELD,
+  Play,
+  PlayerShape,
+  Point,
+  Route,
+  RouteKind,
+  ROUTE_COLORS,
+  Team,
+  Tool,
+  uid,
+} from './types'
 import { findFormation } from './data/formations'
 import { materializeQuickRoute, QuickRoute } from './data/routeTree'
 import { seedPlays } from './data/seed'
-import { respot, spotFromMid } from './utils/field'
+import { redepth, respot, spotFromMid } from './utils/field'
 
 interface HistoryEntry {
   playId: string
@@ -23,6 +36,7 @@ interface Store {
   future: HistoryEntry[]
   printMode: boolean
   printSize: 'large' | 'small'
+  display: DisplaySettings
 
   setTool: (t: Tool) => void
   setRouteColor: (c: string) => void
@@ -35,11 +49,15 @@ interface Store {
   updatePlay: (patch: Partial<Play>) => void
   applyFormation: (team: Team, name: string) => void
   setBallSpot: (x: number) => void
+  setFieldPosition: (yardsToGoal?: number) => void
   clearTeam: (team: Team) => void
   flipPlay: () => void
   movePlayer: (id: string, dx: number, dy: number) => void
   moveVertex: (routeId: string, index: number, p: Point) => void
   relabelPlayer: (id: string, label: string) => void
+  setPlayerShape: (id: string, shape: PlayerShape) => void
+  setPlayerFill: (id: string, fill?: string) => void
+  setDisplay: (patch: Partial<DisplaySettings>) => void
   startRoute: (playerId: string) => void
   addDrawPoint: (p: Point) => void
   finishRoute: () => void
@@ -110,6 +128,7 @@ export const useStore = create<Store>()(
         future: [],
         printMode: false,
         printSize: 'large' as const,
+        display: DEFAULT_DISPLAY,
 
         setTool: (t) => set({ tool: t, drawing: null }),
         setRouteColor: (c) => {
@@ -207,6 +226,27 @@ export const useStore = create<Store>()(
           }))
         },
 
+        /**
+         * Move the ball down the field. Inside the 26 the end zone comes into
+         * view, and the play has to fit what is left in front of it: everything
+         * downfield of the LOS — routes and defenders alike — compresses so the
+         * deepest point lands on the back line rather than off the field.
+         */
+        setFieldPosition: (yardsToGoal) => {
+          const play = current()
+          if (!play || play.yardsToGoal === yardsToGoal) return
+          get().commit()
+          patchCurrent((p) => ({
+            ...p,
+            yardsToGoal,
+            players: p.players.map((pl) => ({ ...pl, y: redepth(pl.y, p.yardsToGoal, yardsToGoal) })),
+            routes: p.routes.map((r) => ({
+              ...r,
+              points: r.points.map((pt) => ({ x: pt.x, y: redepth(pt.y, p.yardsToGoal, yardsToGoal) })),
+            })),
+          }))
+        },
+
         flipPlay: () => {
           get().commit()
           // mirror the whole play, ball spot included
@@ -247,6 +287,29 @@ export const useStore = create<Store>()(
             ...p,
             players: p.players.map((pl) => (pl.id === id ? { ...pl, label } : pl)),
           })),
+
+        setPlayerShape: (id, shape) => {
+          get().commit()
+          patchCurrent((p) => ({
+            ...p,
+            players: p.players.map((pl) => (pl.id === id ? { ...pl, shape } : pl)),
+          }))
+        },
+
+        setPlayerFill: (id, fill) => {
+          get().commit()
+          patchCurrent((p) => ({
+            ...p,
+            players: p.players.map((pl) => {
+              if (pl.id !== id) return pl
+              const next = { ...pl, fill }
+              if (!fill) delete next.fill
+              return next
+            }),
+          }))
+        },
+
+        setDisplay: (patch) => set((st) => ({ display: { ...st.display, ...patch } })),
 
         startRoute: (playerId) => {
           const play = current()
@@ -297,7 +360,7 @@ export const useStore = create<Store>()(
             playerId,
             kind: template.kind,
             color: get().routeColor,
-            points: materializeQuickRoute(player, template, play?.ballX ?? FIELD.BALL_X),
+            points: materializeQuickRoute(player, template, play?.ballX ?? FIELD.BALL_X, play?.yardsToGoal),
           }
           patchCurrent((p) => ({
             ...p,
@@ -408,7 +471,7 @@ export const useStore = create<Store>()(
           }
         }
       }),
-      partialize: (s) => ({ plays: s.plays, currentId: s.currentId, routeColor: s.routeColor }),
+      partialize: (s) => ({ plays: s.plays, currentId: s.currentId, routeColor: s.routeColor, display: s.display }),
     },
   ),
 )

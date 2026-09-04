@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
-import { HASH_SPOTS, hashIdForX, Play } from '../types'
+import { FIELD_SPOTS, HASH_SPOTS, hashIdForX, Play } from '../types'
 import { DEFENSE_FORMATIONS, OFFENSE_FORMATIONS } from '../data/formations'
 import { getShareUrl, onSyncStatus, SyncStatus } from '../sync'
 import { exportCurrentPlayPNG, exportPlaybookJSON, parsePlaybookJSON } from '../utils/export'
@@ -43,6 +43,7 @@ export function TopBar({ play, onOpenCoach }: { play: Play; onOpenCoach: () => v
   const canUndo = useStore((st) => st.past.length > 0)
   const canRedo = useStore((st) => st.future.length > 0)
   const plays = useStore((st) => st.plays)
+  const display = useStore((st) => st.display)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,9 +51,10 @@ export function TopBar({ play, onOpenCoach }: { play: Play; onOpenCoach: () => v
     e.target.value = ''
     if (!file) return
     try {
-      const plays = parsePlaybookJSON(await file.text())
+      const { plays, display } = parsePlaybookJSON(await file.text())
       if (confirm(`Replace your current playbook with ${plays.length} imported play(s)?`)) {
         s().importPlays(plays)
+        if (display) s().setDisplay(display)
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Could not read that file')
@@ -115,6 +117,18 @@ export function TopBar({ play, onOpenCoach }: { play: Play; onOpenCoach: () => v
             </button>
           ))}
         </div>
+        <select
+          className="select spot-select"
+          value={play.yardsToGoal ?? ''}
+          onChange={(e) => s().setFieldPosition(e.target.value === '' ? undefined : Number(e.target.value))}
+          title="Where the ball is down the field. Inside the 26 the end zone comes into view and the play compresses to fit the space in front of it."
+        >
+          {FIELD_SPOTS.map((spot) => (
+            <option key={spot.label} value={spot.yardsToGoal ?? ''}>
+              {spot.label}
+            </option>
+          ))}
+        </select>
         <button className="btn ghost" onClick={() => s().flipPlay()} title="Mirror the play left-right">
           ⇋ Flip
         </button>
@@ -140,7 +154,7 @@ export function TopBar({ play, onOpenCoach }: { play: Play; onOpenCoach: () => v
           Print / PDF
         </button>
         <span className="divider" />
-        <button className="btn ghost" onClick={() => exportPlaybookJSON(plays)} title="Back up the whole playbook to a file">
+        <button className="btn ghost" onClick={() => exportPlaybookJSON(plays, display)} title="Back up the whole playbook to a file">
           Backup
         </button>
         <button className="btn ghost" onClick={() => fileRef.current?.click()} title="Restore a playbook backup file">

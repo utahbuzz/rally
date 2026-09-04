@@ -26,6 +26,13 @@ no learning curve, works on a laptop or a sideline tablet.
   of field
 - **Custom drawing** — routes (arrow), blocks (⊤), motion (dashed), with
   45° snap, rounded breaks, draggable break points, and six route colors
+- **Field position** — spot the ball anywhere from the open field to the +1 or
+  your own 2: the end zone comes into view, the first-down marker disappears
+  when it's goal to go, and the play compresses into the space actually in
+  front of it (see below)
+- **Display settings** — position letters, jersey numbers or blank markers;
+  circles, squares, triangles or bare letters per side; and fills by team or
+  by position group, plus a colour on any single player
 - **Drag anything** — players carry their routes with them
 - **Playbook** — searchable, taggable play list with live thumbnails,
   duplicate and mirror ("Flip") in one click
@@ -115,6 +122,17 @@ the notation practice scripts use). The box travels with the ball while
 detached receivers compress into the boundary and widen to the field, the
 way alignments actually work — see `src/utils/field.ts`.
 
+**Field position:** plays also record how far it is to the goal line, and
+`create_play` / `create_custom_play` take `field_position` (yards to the
+opponent's goal, or 90-99 to back the offense up). Depth compresses the same
+way splits do at a hash: the front seven do not move, because an end and a
+linebacker line up where they line up whatever the yard line, while the space
+downfield scales to what is really in front of the ball — so safeties walk
+down and vertical routes finish in the end zone instead of running off the
+top of the field. Anchored to open-field depth rather than to the play's own
+contents, the transform is invertible: move the ball back out of the red zone
+and you get the play you drew.
+
 **Scout cards:** `create_custom_play` places every player explicitly, so
 Claude can draw any opponent look — Wing-T, double wing, flexbone,
 unbalanced lines — with pulling guards, ball-carrier paths, and blocking
@@ -143,6 +161,14 @@ against the live endpoints), so the page is served as source text and its
 scripts are blocked. The GitHub CDNs (jsDelivr, Statically) do the same.
 The `playcaller` edge function now just 302-redirects to the Pages URL so
 older links keep working.
+
+**Display settings** (labels, marker shapes, team and position-group fills)
+are a per-browser preference stored alongside the playbook and applied to the
+canvas, thumbnails and print alike. They travel in a JSON backup, so handing a
+staff a backup file hands them the look too. A colour set on an individual
+player lives on the play itself, so it syncs and survives export — which is
+what `create_custom_play`'s per-player `fill` is for: colour the scout offense
+so the defense can pick it out on a card.
 
 Roadmap: opponent-data ingestion (Hudl breakdown exports) for tendency
 analysis, and generating a full week of installs, call sheets and practice

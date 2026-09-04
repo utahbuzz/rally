@@ -1,5 +1,6 @@
 import { useStore } from '../store'
 import { ROUTE_COLORS, Tool } from '../types'
+import { DisplayMenu } from './DisplayMenu'
 
 const TOOLS: Array<{ id: Tool; label: string; icon: string; key: string; hint: string }> = [
   { id: 'select', label: 'Select', icon: '↖', key: 'V', hint: 'Move players, edit routes' },
@@ -27,6 +28,9 @@ export function Toolbar() {
             {t.label}
           </button>
         ))}
+      </div>
+      <div className="tool-group">
+        <DisplayMenu />
       </div>
       <div className="tool-group colors">
         {ROUTE_COLORS.map((c) => (

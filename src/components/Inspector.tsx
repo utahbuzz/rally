@@ -1,8 +1,15 @@
 import { useStore } from '../store'
-import { Play, ROUTE_COLORS, RouteKind } from '../types'
+import { MARKER_COLORS, Play, PlayerShape, ROUTE_COLORS, RouteKind } from '../types'
 import { QUICK_ASSIGNMENTS, QUICK_ROUTES } from '../data/routeTree'
 
 const KIND_LABEL: Record<RouteKind, string> = { route: 'Route', block: 'Block', motion: 'Motion' }
+
+const SHAPES: Array<{ id: PlayerShape; label: string; title: string }> = [
+  { id: 'circle', label: '○', title: 'Circle' },
+  { id: 'square', label: '□', title: 'Square' },
+  { id: 'triangle', label: '△', title: 'Triangle' },
+  { id: 'text', label: 'A', title: 'Letter only' },
+]
 
 export function Inspector({ play }: { play: Play }) {
   const selectedPlayerId = useStore((s) => s.selectedPlayerId)
@@ -27,6 +34,38 @@ export function Inspector({ play }: { play: Play }) {
             onChange={(e) => s().relabelPlayer(player.id, e.target.value.toUpperCase())}
             title="Player label"
           />
+        </div>
+
+        <h3>Marker</h3>
+        <div className="seg">
+          {SHAPES.map((sh) => (
+            <button
+              key={sh.id}
+              className={`seg-btn ${player.shape === sh.id ? 'active' : ''}`}
+              onClick={() => s().setPlayerShape(player.id, sh.id)}
+              title={sh.title}
+            >
+              {sh.label}
+            </button>
+          ))}
+        </div>
+        <div className="swatch-row">
+          {MARKER_COLORS.map((c) => (
+            <button
+              key={c}
+              className={`swatch ${player.fill?.toLowerCase() === c ? 'active' : ''}`}
+              style={{ background: c, boxShadow: c === '#ffffff' ? 'inset 0 0 0 1px #d5d3e0' : undefined }}
+              onClick={() => s().setPlayerFill(player.id, c)}
+              title="Fill this player's marker"
+            />
+          ))}
+          <button
+            className={`swatch reset ${player.fill ? '' : 'active'}`}
+            onClick={() => s().setPlayerFill(player.id, undefined)}
+            title="Back to the Display setting"
+          >
+            ⌫
+          </button>
         </div>
 
         <h3>Quick routes</h3>

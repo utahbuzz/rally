@@ -74,7 +74,47 @@ console.log('print cards:', printCards)
 await page.screenshot({ path: shots + '/04-print.png' })
 await page.getByRole('button', { name: 'Close' }).click()
 
-// 9. persistence: reload and count plays
+// 9. field position: end zone appears, goal to go, nothing past the back line
+const spot = page.locator('.spot-select')
+await spot.selectOption('7')
+await page.waitForTimeout(250)
+console.log('end zone band at the +7:', await page.locator('#play-svg rect[fill="#eeeaff"]').count())
+console.log('first-down marker at the +7 (goal to go, expect 0):', await page.locator('#play-svg line[stroke="#f59e0b"]').count())
+console.log('thumbnails follow the play:', await page.locator('.thumb rect[fill="#eeeaff"]').count())
+await spot.selectOption('98')
+await page.waitForTimeout(250)
+console.log('own end zone backed up on the 2:', await page.locator('#play-svg rect[fill="#eeeaff"]').count())
+await spot.selectOption('')
+await page.waitForTimeout(250)
+console.log('end zone cleared in the open field:', (await page.locator('#play-svg rect[fill="#eeeaff"]').count()) === 0)
+
+// 10. display settings: fills, labels, shapes
+await page.getByRole('button', { name: 'Display' }).click()
+await page.waitForTimeout(150)
+await page.getByRole('button', { name: 'By group', exact: true }).click()
+await page.waitForTimeout(200)
+const groupFills = await page.locator('#play-svg circle').evaluateAll((els) =>
+  [...new Set(els.map((e) => e.getAttribute('fill')))].filter((f) => f && f !== 'transparent'),
+)
+console.log('group fills on the field:', groupFills.join(' '))
+await page.getByRole('button', { name: 'Number', exact: true }).click()
+await page.waitForTimeout(200)
+const nums = await page.locator('#play-svg text').allTextContents()
+console.log('number labels:', nums.slice(0, 11).join(','))
+await page.getByRole('button', { name: 'Position', exact: true }).click()
+await page.getByRole('button', { name: 'White', exact: true }).click()
+await page.keyboard.press('Escape')
+await page.waitForTimeout(200)
+
+// 11. per-player marker colour
+await page.locator('#play-svg text', { hasText: /^QB$/ }).first().click({ force: true })
+await page.waitForTimeout(200)
+await page.locator('.inspector .swatch-row').first().locator('button').nth(6).click()
+await page.waitForTimeout(200)
+console.log('per-player violet marker:', await page.locator('#play-svg circle[fill="#7c3aed"]').count())
+await page.keyboard.press('Escape')
+
+// 12. persistence: reload and count plays
 await page.reload()
 await page.waitForTimeout(500)
 const cardsAfterReload = await page.locator('.play-card').count()

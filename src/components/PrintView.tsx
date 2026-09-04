@@ -5,6 +5,7 @@ import { PlaySVG } from './PlayGraphics'
 export function PrintView() {
   const plays = useStore((s) => s.plays)
   const printSize = useStore((s) => s.printSize)
+  const display = useStore((s) => s.display)
   const s = useStore.getState
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export function PrintView() {
               <span className="print-card-name">{p.name}</span>
               <span className="print-card-form">{p.offFormation}</span>
             </div>
-            <PlaySVG play={p} />
+            <PlaySVG play={p} display={display} />
             {printSize === 'large' && p.notes && <div className="print-card-notes">{p.notes}</div>}
           </div>
         ))}

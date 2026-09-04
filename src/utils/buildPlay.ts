@@ -6,7 +6,7 @@
 import { OFFENSE_FORMATIONS, DEFENSE_FORMATIONS, findFormation } from '../data/formations'
 import { materializeQuickRoute, QUICK_ASSIGNMENTS, QUICK_ROUTES } from '../data/routeTree'
 import { FIELD, HASH_SPOTS, Play, Player, Point, Route, RouteKind, ROUTE_COLORS, uid } from '../types'
-import { spotFromMid } from './field'
+import { compressDepth, expandDepth, spotFromMid } from './field'
 
 const COLOR_NAMES: Record<string, string> = {
   red: ROUTE_COLORS[0],
@@ -32,6 +32,8 @@ export interface PlaySpec {
   offense_formation: string
   defense_formation?: string
   hash?: string
+  /** Yards to the opponent's goal line; omit for open field. */
+  field_position?: number
   tags?: string[]
   notes?: string
   assignments?: AssignmentSpec[]
@@ -54,9 +56,13 @@ export function buildPlay(spec: PlaySpec): { play?: Play; problems: string[] } {
   }
 
   const spot = HASH_SPOTS.find((h) => h.id === (spec.hash ?? 'MOF')) ?? HASH_SPOTS[2]
+  const yardsToGoal = spec.field_position
   const players: Player[] = [...off.players(), ...(def ? def.players() : [])].map((p) => ({
     ...p,
     x: spotFromMid(p.x, spot.x),
+    // formations are defined at open-field depth; squeeze them into the
+    // space in front of the ball so nobody aligns past the back line
+    y: compressDepth(p.y, yardsToGoal),
   }))
 
   const routes: Route[] = []
@@ -77,7 +83,10 @@ export function buildPlay(spec: PlaySpec): { play?: Play; problems: string[] } {
         { x: player.x, y: player.y },
         ...a.custom_path.map((p) => ({
           x: Math.min(Math.max(player.x + p.x * 10, 6), FIELD.W - 6),
-          y: Math.min(Math.max(player.y + p.y * 10 * dir, 6), FIELD.H - 6),
+          y: compressDepth(
+            Math.min(Math.max(expandDepth(player.y, yardsToGoal) + p.y * 10 * dir, 6), FIELD.H - 6),
+            yardsToGoal,
+          ),
         })),
       ]
       kind = a.kind ?? 'route'
@@ -87,7 +96,7 @@ export function buildPlay(spec: PlaySpec): { play?: Play; problems: string[] } {
         problems.push(`unknown route "${a.route}" for ${a.player}`)
         continue
       }
-      points = materializeQuickRoute(player, template, spot.x)
+      points = materializeQuickRoute(player, template, spot.x, yardsToGoal)
       kind = a.kind ?? template.kind
     } else {
       problems.push(`${a.player} needs a route or custom_path`)
@@ -101,6 +110,7 @@ export function buildPlay(spec: PlaySpec): { play?: Play; problems: string[] } {
       id: uid(),
       name: spec.name,
       ballX: spot.x,
+      yardsToGoal,
       offFormation: off.name,
       defFormation: def?.name ?? '',
       tags: spec.tags ?? [],

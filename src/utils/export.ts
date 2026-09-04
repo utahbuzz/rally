@@ -1,4 +1,4 @@
-import { Play } from '../types'
+import { DisplaySettings, Play } from '../types'
 
 function download(url: string, filename: string) {
   const a = document.createElement('a')
@@ -50,15 +50,21 @@ export function exportCurrentPlayPNG(play: Play, scale = 3): void {
   img.src = svgUrl
 }
 
-export function exportPlaybookJSON(plays: Play[]): void {
-  const payload = { app: 'rally-playbook', version: 1, exportedAt: new Date().toISOString(), plays }
+export function exportPlaybookJSON(plays: Play[], display?: DisplaySettings): void {
+  const payload = {
+    app: 'rally-playbook',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    display,
+    plays,
+  }
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   download(url, `rally-playbook-${new Date().toISOString().slice(0, 10)}.json`)
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
-export function parsePlaybookJSON(text: string): Play[] {
+export function parsePlaybookJSON(text: string): { plays: Play[]; display?: DisplaySettings } {
   const data = JSON.parse(text)
   const plays = Array.isArray(data) ? data : data?.plays
   if (!Array.isArray(plays)) throw new Error('Not a Rally Playbook file')
@@ -67,5 +73,6 @@ export function parsePlaybookJSON(text: string): Play[] {
       throw new Error('Not a Rally Playbook file')
     }
   }
-  return plays as Play[]
+  const display = !Array.isArray(data) && data?.display ? (data.display as DisplaySettings) : undefined
+  return { plays: plays as Play[], display }
 }

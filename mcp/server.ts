@@ -219,6 +219,23 @@ type AssignmentInput = {
   custom_path?: { x: number; y: number }[]
   kind?: Route['kind']
   color?: string
+  read?: string
+}
+
+type LabelInput = { text: string; x_yards: number; depth_yards: number; color?: string }
+
+/** Turn label specs into diagram notes, spotted like everything else. */
+function buildAnnotations(labels: LabelInput[] | undefined, ballX: number, yardsToGoal?: number) {
+  return (labels ?? []).map((l) => ({
+    id: uid(),
+    x: Math.min(Math.max(spotFromMid(l.x_yards * 10, ballX), 8), FIELD.W - 8),
+    y: compressDepth(
+      Math.min(Math.max(FIELD.LOS - l.depth_yards * 10, 12), FIELD.H - 8),
+      yardsToGoal,
+    ),
+    text: l.text,
+    color: COLOR_NAMES[(l.color ?? 'black').toLowerCase()] ?? ROUTE_COLORS[5],
+  }))
 }
 
 /** Materialize route assignments against a set of players (shared by both play tools). */
@@ -266,7 +283,14 @@ function buildRoutes(
       problems.push(`assignment for ${a.player} needs a route or custom_path`)
       continue
     }
-    routes.push({ id: uid(), playerId: player.id, kind, color, points })
+    routes.push({
+      id: uid(),
+      playerId: player.id,
+      kind,
+      color,
+      points,
+      ...(a.read ? { read: a.read.slice(0, 2) } : {}),
+    })
   }
   return { routes, problems }
 }
@@ -297,6 +321,20 @@ const assignmentSchema = z.object({
     .optional()
     .describe('Line style for custom paths: route = arrow, block = T-bar, motion = dashed'),
   color: z.string().optional().describe('red, blue, green, orange, purple, or black'),
+  read: z
+    .string()
+    .max(2)
+    .optional()
+    .describe(
+      'Where this route sits in the quarterback progression: "1", "2", "3" or "C" for the checkdown. Drawn as a badge at the end of the route so a player can read the call off the card. Number the whole progression on pass plays.',
+    ),
+})
+
+const labelSchema = z.object({
+  text: z.string().describe('Short note written on the diagram, e.g. "vs 2-high: work the seam"'),
+  x_yards: z.number().min(0).max(53.3).describe('From the LEFT sideline in yards (the ball is at 26.65)'),
+  depth_yards: z.number().describe('Downfield of the LOS in yards; negative puts it in the backfield'),
+  color: z.string().optional().describe('red, blue, green, orange, purple, or black'),
 })
 
 server.registerTool(
@@ -322,9 +360,10 @@ server.registerTool(
       tags: z.array(z.string()).optional().describe('e.g. ["Pass", "3rd Down", "vs Cover 2"]'),
       notes: z.string().optional().describe('Coaching notes: read progression, protection, keys'),
       assignments: z.array(assignmentSchema).describe('One entry per player who gets a route/block'),
+      labels: z.array(labelSchema).optional().describe('Notes written on the diagram itself'),
     },
   },
-  async ({ name, offense_formation, defense_formation, hash, field_position, tags, notes, assignments }) => {
+  async ({ name, offense_formation, defense_formation, hash, field_position, tags, notes, assignments, labels }) => {
     const spot0 = hashSpot(hash)
     const packForm = findPackFormation(offense_formation)
     const off = packForm ? undefined : findFormation('O', offense_formation)
@@ -365,6 +404,7 @@ server.registerTool(
       notes: notes ?? '',
       players,
       routes,
+      annotations: buildAnnotations(labels, spot.x, field_position),
       updatedAt: Date.now(),
     }
 
@@ -419,9 +459,10 @@ server.registerTool(
         )
         .describe('Every player to draw, both teams as needed'),
       assignments: z.array(assignmentSchema).optional().describe('Routes/blocks, same format as create_play'),
+      labels: z.array(labelSchema).optional().describe('Notes written on the diagram itself'),
     },
   },
-  async ({ name, hash, field_position, tags, notes, players: placed, assignments }) => {
+  async ({ name, hash, field_position, tags, notes, players: placed, assignments, labels }) => {
     const spot = hashSpot(hash)
     const players: Player[] = placed.map((p) => ({
       id: uid(),

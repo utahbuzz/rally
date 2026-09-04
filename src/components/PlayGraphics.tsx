@@ -1,4 +1,5 @@
 import {
+  Annotation,
   DEFAULT_DISPLAY,
   DisplaySettings,
   END_ZONE,
@@ -9,6 +10,7 @@ import {
   Player,
   Route,
   textOn,
+  readOrder,
 } from '../types'
 import { goalLineY, isGoalToGo, ownGoalLineY } from '../utils/field'
 import { arrowHead, blockBar, roundedPath } from '../utils/geometry'
@@ -112,6 +114,36 @@ export function FieldBackground({
   )
 }
 
+/**
+ * The progression badge for a route, set just past the arrowhead in the
+ * direction the receiver is running — where a playbook writes it.
+ */
+function ReadBadge({ route }: { route: Route }) {
+  if (!route.read) return null
+  const pts = route.points
+  const from = pts[pts.length - 2]
+  const to = pts[pts.length - 1]
+  const len = Math.hypot(to.x - from.x, to.y - from.y) || 1
+  const x = Math.min(Math.max(to.x + ((to.x - from.x) / len) * 13, 10), FIELD.W - 10)
+  const y = Math.min(Math.max(to.y + ((to.y - from.y) / len) * 13, 10), FIELD.H - 10)
+  return (
+    <g>
+      <circle cx={x} cy={y} r={7.4} fill={route.color} stroke="#fff" strokeWidth={1.6} />
+      <text
+        x={x}
+        y={y + 0.4}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={8.5}
+        fontWeight={800}
+        fill={textOn(route.color)}
+      >
+        {route.read}
+      </text>
+    </g>
+  )
+}
+
 export function RouteGlyph({
   route,
   selected,
@@ -149,8 +181,66 @@ export function RouteGlyph({
       ) : (
         <polygon points={arrowHead(from, to, 11)} fill={route.color} />
       )}
+      <ReadBadge route={route} />
     </g>
   )
+}
+
+/** A note written on the diagram, haloed so it reads over lines and routes. */
+export function AnnotationGlyph({
+  note,
+  selected,
+}: {
+  note: Annotation
+  selected?: boolean
+}) {
+  const lines = note.text.split('\n')
+  return (
+    <g>
+      {selected && (
+        <rect
+          x={note.x - 3}
+          y={note.y - 9}
+          width={Math.max(...lines.map((l) => l.length)) * 5.6 + 6}
+          height={lines.length * 13 + 3}
+          rx={3}
+          fill="none"
+          stroke="#6965db"
+          strokeWidth={1.6}
+          opacity={0.9}
+        />
+      )}
+      <text
+        x={note.x}
+        y={note.y}
+        fontSize={11}
+        fontWeight={700}
+        fill={note.color}
+        stroke="#fff"
+        strokeWidth={3}
+        paintOrder="stroke"
+        strokeLinejoin="round"
+        style={{ fontFamily: 'inherit' }}
+      >
+        {lines.map((line, i) => (
+          <tspan key={i} x={note.x} dy={i === 0 ? 0 : 13}>
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  )
+}
+
+/** "1 Z → 2 Y → 3 RB" for a play whose routes carry a progression. */
+export function progressionLine(play: Play): string {
+  const withRead = play.routes.filter((r) => r.read)
+  if (!withRead.length) return ''
+  return withRead
+    .slice()
+    .sort((a, b) => readOrder(a.read!) - readOrder(b.read!))
+    .map((r) => `${r.read} ${play.players.find((p) => p.id === r.playerId)?.label ?? '?'}`)
+    .join(' → ')
 }
 
 /** Triangle marker points, centred on (x, y) and pointing upfield. */
@@ -295,6 +385,9 @@ export function PlaySVG({
       ))}
       {play.players.map((p) => (
         <PlayerGlyph key={p.id} player={p} display={display} number={numbers[p.id]} />
+      ))}
+      {(play.annotations ?? []).map((a) => (
+        <AnnotationGlyph key={a.id} note={a} />
       ))}
     </svg>
   )

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from '../store'
-import { PlaySVG } from './PlayGraphics'
+import { PlaySVG, progressionLine } from './PlayGraphics'
 
 export function PrintView() {
   const plays = useStore((s) => s.plays)
@@ -52,6 +52,7 @@ export function PrintView() {
               <span className="print-card-form">{p.offFormation}</span>
             </div>
             <PlaySVG play={p} display={display} />
+            {progressionLine(p) && <div className="print-card-read">{progressionLine(p)}</div>}
             {printSize === 'large' && p.notes && <div className="print-card-notes">{p.notes}</div>}
           </div>
         ))}

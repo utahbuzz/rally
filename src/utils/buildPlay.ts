@@ -5,7 +5,7 @@
  */
 import { OFFENSE_FORMATIONS, DEFENSE_FORMATIONS, findFormation } from '../data/formations'
 import { materializeQuickRoute, QUICK_ASSIGNMENTS, QUICK_ROUTES } from '../data/routeTree'
-import { FIELD, HASH_SPOTS, Play, Player, Point, Route, RouteKind, ROUTE_COLORS, uid } from '../types'
+import { Annotation, FIELD, HASH_SPOTS, Play, Player, Point, Route, RouteKind, ROUTE_COLORS, uid } from '../types'
 import { compressDepth, expandDepth, spotFromMid } from './field'
 
 const COLOR_NAMES: Record<string, string> = {
@@ -25,6 +25,14 @@ export interface AssignmentSpec {
   custom_path?: Point[]
   kind?: RouteKind
   color?: string
+  read?: string
+}
+
+export interface LabelSpec {
+  text: string
+  x_yards: number
+  depth_yards: number
+  color?: string
 }
 
 export interface PlaySpec {
@@ -37,6 +45,7 @@ export interface PlaySpec {
   tags?: string[]
   notes?: string
   assignments?: AssignmentSpec[]
+  labels?: LabelSpec[]
 }
 
 export const OFFENSE_NAMES = OFFENSE_FORMATIONS.map((f) => f.name)
@@ -102,8 +111,23 @@ export function buildPlay(spec: PlaySpec): { play?: Play; problems: string[] } {
       problems.push(`${a.player} needs a route or custom_path`)
       continue
     }
-    routes.push({ id: uid(), playerId: player.id, kind, color, points })
+    routes.push({
+      id: uid(),
+      playerId: player.id,
+      kind,
+      color,
+      points,
+      ...(a.read ? { read: String(a.read).slice(0, 2) } : {}),
+    })
   }
+
+  const annotations: Annotation[] = (spec.labels ?? []).map((l) => ({
+    id: uid(),
+    x: Math.min(Math.max(spotFromMid(l.x_yards * 10, spot.x), 8), FIELD.W - 8),
+    y: compressDepth(Math.min(Math.max(FIELD.LOS - l.depth_yards * 10, 12), FIELD.H - 8), yardsToGoal),
+    text: l.text,
+    color: COLOR_NAMES[(l.color ?? 'black').toLowerCase()] ?? ROUTE_COLORS[5],
+  }))
 
   return {
     play: {
@@ -117,6 +141,7 @@ export function buildPlay(spec: PlaySpec): { play?: Play; problems: string[] } {
       notes: spec.notes ?? '',
       players,
       routes,
+      annotations,
       updatedAt: Date.now(),
     },
     problems,

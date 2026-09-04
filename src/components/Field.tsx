@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { FIELD, Play, Point } from '../types'
 import { clampToField, roundedPath, snap45 } from '../utils/geometry'
-import { FieldBackground, playerNumbers, PlayerGlyph, PLAYER_R, RouteGlyph } from './PlayGraphics'
+import { AnnotationGlyph, FieldBackground, playerNumbers, PlayerGlyph, PLAYER_R, RouteGlyph } from './PlayGraphics'
 
 type Drag =
   | { type: 'player'; id: string; last: Point }
   | { type: 'vertex'; routeId: string; index: number }
+  | { type: 'note'; id: string; last: Point }
   | null
 
 export function Field({ play }: { play: Play }) {
@@ -19,6 +20,7 @@ export function Field({ play }: { play: Play }) {
   const drawing = useStore((s) => s.drawing)
   const selectedPlayerId = useStore((s) => s.selectedPlayerId)
   const selectedRouteId = useStore((s) => s.selectedRouteId)
+  const selectedAnnotationId = useStore((s) => s.selectedAnnotationId)
   const display = useStore((s) => s.display)
   const s = useStore.getState
 
@@ -40,8 +42,22 @@ export function Field({ play }: { play: Play }) {
       s().addDrawPoint(e.shiftKey ? snap45(last, p) : p)
       return
     }
+    if (tool === 'note') {
+      s().addAnnotation(p)
+      return
+    }
     s().selectPlayer(null)
     s().selectRoute(null)
+    s().selectAnnotation(null)
+  }
+
+  const onNoteDown = (e: React.PointerEvent, id: string) => {
+    if (drawing || tool === 'note') return
+    e.stopPropagation()
+    s().selectAnnotation(id)
+    s().commit()
+    dragRef.current = { type: 'note', id, last: toField(e) }
+    svgRef.current?.setPointerCapture(e.pointerId)
   }
 
   const onPlayerDown = (e: React.PointerEvent, playerId: string) => {
@@ -88,6 +104,9 @@ export function Field({ play }: { play: Play }) {
     if (drag.type === 'player') {
       s().movePlayer(drag.id, p.x - drag.last.x, p.y - drag.last.y)
       drag.last = p
+    } else if (drag.type === 'note') {
+      s().moveAnnotation(drag.id, p.x - drag.last.x, p.y - drag.last.y)
+      drag.last = p
     } else {
       s().moveVertex(drag.routeId, drag.index, p)
     }
@@ -109,9 +128,11 @@ export function Field({ play }: { play: Play }) {
       const st = s()
       if (e.key === 'Escape') {
         if (st.drawing) st.cancelRoute()
+        else if (st.tool === 'note') st.setTool('select')
         else {
           st.selectPlayer(null)
           st.selectRoute(null)
+          st.selectAnnotation(null)
         }
       } else if (e.key === 'Enter' && st.drawing) {
         st.finishRoute()
@@ -129,6 +150,7 @@ export function Field({ play }: { play: Play }) {
         else if (e.key === 'r' || e.key === '2') st.setTool('route')
         else if (e.key === 'b' || e.key === '3') st.setTool('block')
         else if (e.key === 'm' || e.key === '4') st.setTool('motion')
+        else if (e.key === 't' || e.key === '5') st.setTool('note')
       }
     }
     window.addEventListener('keydown', onKey)
@@ -145,7 +167,7 @@ export function Field({ play }: { play: Play }) {
     previewPath = roundedPath([...drawing.points, hover], 9, PLAYER_R + 2.5)
   }
 
-  const cursor = drawing ? 'crosshair' : tool === 'select' ? 'default' : 'crosshair'
+  const cursor = drawing ? 'crosshair' : tool === 'select' ? 'default' : tool === 'note' ? 'text' : 'crosshair'
 
   return (
     <svg
@@ -192,6 +214,13 @@ export function Field({ play }: { play: Play }) {
         </g>
       ))}
 
+      {/* notes */}
+      {(play.annotations ?? []).map((a) => (
+        <g key={a.id} onPointerDown={(e) => onNoteDown(e, a.id)} style={{ cursor: tool === 'select' ? 'grab' : 'crosshair' }}>
+          <AnnotationGlyph note={a} selected={a.id === selectedAnnotationId} />
+        </g>
+      ))}
+
       {/* vertex handles for the selected route */}
       {selectedRoute &&
         !drawing &&
@@ -215,6 +244,11 @@ export function Field({ play }: { play: Play }) {
       {drawing && (
         <text x={FIELD.W / 2} y={FIELD.H - 12} textAnchor="middle" fontSize={11} fill="#64748b">
           click to add points · double-click or Enter to finish · Esc to cancel · Shift = snap 45°
+        </text>
+      )}
+      {!drawing && tool === 'note' && (
+        <text x={FIELD.W / 2} y={FIELD.H - 12} textAnchor="middle" fontSize={11} fill="#64748b">
+          click anywhere to drop a note · Esc to go back to Select
         </text>
       )}
     </svg>

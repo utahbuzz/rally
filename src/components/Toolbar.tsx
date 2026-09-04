@@ -7,6 +7,7 @@ const TOOLS: Array<{ id: Tool; label: string; icon: string; key: string; hint: s
   { id: 'route', label: 'Route', icon: '→', key: 'R', hint: 'Click a player, then click points' },
   { id: 'block', label: 'Block', icon: '⊤', key: 'B', hint: 'Draw a blocking assignment' },
   { id: 'motion', label: 'Motion', icon: '⇢', key: 'M', hint: 'Draw pre-snap motion (dashed)' },
+  { id: 'note', label: 'Note', icon: 'T', key: 'T', hint: 'Write a note on the play' },
 ]
 
 export function Toolbar() {

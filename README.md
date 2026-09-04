@@ -34,8 +34,15 @@ no learning curve, works on a laptop or a sideline tablet.
   circles, squares, triangles or bare letters per side; and fills by team or
   by position group, plus a colour on any single player
 - **Drag anything** — players carry their routes with them
-- **Playbook** — searchable, taggable play list with live thumbnails,
-  duplicate and mirror ("Flip") in one click
+- **Read progression** — number a route 1 / 2 / 3 / C and the badge is drawn
+  at the end of it, so a quarterback can read the order straight off the card;
+  print cards carry the progression line ("1 Z → 2 Y → 3 RB")
+- **Notes on the diagram** — the Note tool (T) drops text anywhere on the
+  field for a coverage alert, a check or a coaching point; drag to place it
+- **Playbook** — grouped by formation or by your own tags, collapsible with
+  counts, starred shortlist for a game plan, and a search across names,
+  formations, tags and notes; live thumbnails, duplicate and mirror ("Flip")
+  in one click
 - **Print / PDF** — 4-per-page play cards or 8-per-page wristband sheets via
   the browser print dialog
 - **PNG export** per play, **JSON backup/restore** for the whole playbook
@@ -132,6 +139,11 @@ down and vertical routes finish in the end zone instead of running off the
 top of the field. Anchored to open-field depth rather than to the play's own
 contents, the transform is invertible: move the ball back out of the red zone
 and you get the play you drew.
+
+**Reads and notes:** every assignment takes a `read` ("1", "2", "3", "C") and
+both play tools take `labels` — short notes placed on the diagram by yard
+coordinates. Ask for a concept and the progression comes numbered, which is
+what makes a printed card usable by a player rather than only by the staff.
 
 **Scout cards:** `create_custom_play` places every player explicitly, so
 Claude can draw any opponent look — Wing-T, double wing, flexbone,

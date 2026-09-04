@@ -114,11 +114,64 @@ await page.waitForTimeout(200)
 console.log('per-player violet marker:', await page.locator('#play-svg circle[fill="#7c3aed"]').count())
 await page.keyboard.press('Escape')
 
-// 12. persistence: reload and count plays
+// 12. playbook organization: groups, star, search
+console.log('formation groups:', (await page.locator('.group-head').allTextContents()).length)
+await page.getByRole('button', { name: 'Tag', exact: true }).click()
+await page.waitForTimeout(200)
+console.log('tag groups:', (await page.locator('.group-head').allTextContents()).length)
+const beforeCollapse = await page.locator('.play-card').count()
+await page.locator('.group-head').first().click()
+await page.waitForTimeout(150)
+console.log('collapse works:', (await page.locator('.play-card').count()) < beforeCollapse)
+await page.locator('.group-head').first().click()
+await page.getByRole('button', { name: 'Formation', exact: true }).click()
+await page.locator('.play-card').first().hover()
+await page.locator('.play-card .star').first().click()
+await page.waitForTimeout(200)
+await page.locator('.star-tag').click()
+await page.waitForTimeout(200)
+console.log('starred filter shows:', await page.locator('.play-card').count())
+await page.locator('.star-tag').click()
+await page.locator('.search').fill('flood')
+await page.waitForTimeout(200)
+console.log('search flattens groups:', (await page.locator('.group-head').count()) === 0)
+await page.locator('.search').fill('')
+await page.waitForTimeout(200)
+
+// 13. read progression + notes on the diagram
+await page.locator('.play-card').first().click()
+await page.waitForTimeout(250)
+await page.locator('#play-svg polygon').first().click({ force: true })
+await page.waitForTimeout(200)
+await page.locator('.read-seg').getByRole('button', { name: '1', exact: true }).click()
+await page.waitForTimeout(200)
+console.log('read badge drawn:', await page.locator('#play-svg circle[stroke="#fff"]').count())
+await page.keyboard.press('Escape')
+await page.getByRole('button', { name: 'Note' }).click()
+const fieldBox = await page.locator('#play-svg').boundingBox()
+await page.mouse.click(fieldBox.x + fieldBox.width * 0.28, fieldBox.y + fieldBox.height * 0.3)
+await page.waitForTimeout(250)
+await page.locator('.inspector textarea').fill('vs 2-high: work the seam')
+await page.waitForTimeout(250)
+console.log('note drawn:', await page.locator('#play-svg text[paint-order="stroke"]').count())
+await page.keyboard.press('Escape')
+await page.getByRole('button', { name: 'Print / PDF' }).click()
+await page.waitForTimeout(350)
+console.log('progression on the print card:', await page.locator('.print-card-read').first().textContent())
+await page.getByRole('button', { name: 'Close' }).click()
+await page.waitForTimeout(200)
+
+// 14. persistence: reload and count plays
 await page.reload()
 await page.waitForTimeout(500)
 const cardsAfterReload = await page.locator('.play-card').count()
 console.log('cards after reload (persistence):', cardsAfterReload)
+console.log(
+  'reads/notes/stars survive a reload:',
+  await page.locator('#play-svg circle[stroke="#fff"]').count(),
+  await page.locator('#play-svg text[paint-order="stroke"]').count(),
+  await page.locator('.star-tag').count(),
+)
 
 console.log('ERRORS:', errors.length ? errors : 'none')
 await browser.close()

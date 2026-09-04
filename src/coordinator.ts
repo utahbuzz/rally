@@ -107,6 +107,22 @@ const TOOLS = [
         },
         tags: { type: 'array', items: { type: 'string' } },
         notes: { type: 'string', description: 'Read progression, protection, coaching points' },
+        labels: {
+          type: 'array',
+          description:
+            'Notes written on the diagram itself — a coverage alert, a check, a coaching point. Keep them short; the play name and notes carry the detail.',
+          items: {
+            type: 'object',
+            properties: {
+              text: { type: 'string' },
+              x_yards: { type: 'number', description: 'From the left sideline; the ball is at 26.65 of 53.3' },
+              depth_yards: { type: 'number', description: 'Downfield of the LOS; negative is in the backfield' },
+              color: { type: 'string', enum: ['red', 'blue', 'green', 'orange', 'purple', 'black'] },
+            },
+            required: ['text', 'x_yards', 'depth_yards'],
+            additionalProperties: false,
+          },
+        },
         assignments: {
           type: 'array',
           description: 'One entry per player with a job',
@@ -116,6 +132,11 @@ const TOOLS = [
               player: { type: 'string', description: 'Player label from the formation, e.g. "Z", "RB", "LT"' },
               route: { type: 'string', description: `One of: ${[...ROUTE_NAMES, ...BLOCK_NAMES].join(', ')}` },
               color: { type: 'string', enum: ['red', 'blue', 'green', 'orange', 'purple', 'black'] },
+              read: {
+                type: 'string',
+                description:
+                  'Where this route sits in the quarterback progression — "1", "2", "3" or "C" for the checkdown. Drawn as a badge at the end of the route. Number the full progression on every pass play.',
+              },
             },
             required: ['player'],
             additionalProperties: false,
@@ -140,6 +161,7 @@ function systemPrompt(): string {
     '- Check coverage_guide first when a coverage or situation is named, and use what it says.',
     '- Vary formations and concepts across a set; do not draw the same play five times.',
     '- In the red zone set field_position and pick concepts that live in that space (fade, slant, spot, snag, pick) — the field is short, so deep route trees do not belong there.',
+    '- Number the progression with read on every pass play (1, 2, 3, then C for the checkdown) so a quarterback can read the card.',
     '- Name plays the way a coach calls them, and always fill in notes with the read.',
     '- Keep your replies to the coach short: a sentence or two on the plan, then the plays.',
     '',

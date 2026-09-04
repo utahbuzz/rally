@@ -26,8 +26,23 @@ export interface Route {
   playerId: string
   kind: RouteKind
   color: string
+  /**
+   * Where this route sits in the quarterback's progression — "1", "2", "3",
+   * or "C" for the checkdown. Drawn as a badge at the end of the route so a
+   * player can read the call off the card.
+   */
+  read?: string
   /** absolute field coords; first point is the player's center at draw time */
   points: Point[]
+}
+
+/** A note written on the diagram itself. */
+export interface Annotation {
+  id: string
+  x: number
+  y: number
+  text: string
+  color: string
 }
 
 export interface Play {
@@ -44,13 +59,16 @@ export interface Play {
   offFormation: string
   defFormation: string
   tags: string[]
+  /** Pinned to the top of the playbook — a game-plan shortlist. */
+  starred?: boolean
   notes: string
   players: Player[]
   routes: Route[]
+  annotations?: Annotation[]
   updatedAt: number
 }
 
-export type Tool = 'select' | 'route' | 'block' | 'motion'
+export type Tool = 'select' | 'route' | 'block' | 'motion' | 'note'
 
 /** Field geometry, in units of 0.1 yard */
 export const FIELD = {
@@ -153,6 +171,15 @@ export const MARKER_COLORS = [
   '#7c3aed',
   '#0891b2',
 ]
+
+/** Progression slots offered in the UI. "C" is the checkdown. */
+export const READ_OPTIONS = ['1', '2', '3', '4', '5', 'C']
+
+/** Order reads for a progression line: numbers first, then C / hot tags. */
+export function readOrder(read: string): number {
+  const n = Number(read)
+  return Number.isFinite(n) ? n : 90 + read.charCodeAt(0) / 1000
+}
 
 export type PositionGroup = 'OL' | 'QB' | 'RB' | 'WR' | 'DL' | 'LB' | 'DB'
 

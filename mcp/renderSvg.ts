@@ -3,7 +3,7 @@
  * Mirrors src/components/PlayGraphics.tsx so MCP-generated documents
  * (call sheets, install sheets) match what the app draws.
  */
-import { DEFAULT_DISPLAY, END_ZONE, FIELD, markerFill, Play, Player, Route, textOn } from '../src/types'
+import { Annotation, DEFAULT_DISPLAY, END_ZONE, FIELD, markerFill, Play, Player, Route, textOn } from '../src/types'
 import { goalLineY, isGoalToGo, ownGoalLineY } from '../src/utils/field'
 import { arrowHead, blockBar, roundedPath } from '../src/utils/geometry'
 
@@ -77,7 +77,24 @@ function routeSvg(route: Route): string {
   } else {
     end = `<polygon points="${arrowHead(from, to, 11)}" fill="${route.color}"/>`
   }
-  return `<path d="${d}" fill="none" stroke="${route.color}" stroke-width="3" stroke-linecap="round"${dash}/>${end}`
+  let badge = ''
+  if (route.read) {
+    const len = Math.hypot(to.x - from.x, to.y - from.y) || 1
+    const bx = Math.min(Math.max(to.x + ((to.x - from.x) / len) * 13, 10), FIELD.W - 10)
+    const by = Math.min(Math.max(to.y + ((to.y - from.y) / len) * 13, 10), FIELD.H - 10)
+    badge =
+      `<circle cx="${bx}" cy="${by}" r="7.4" fill="${route.color}" stroke="#fff" stroke-width="1.6"/>` +
+      `<text x="${bx}" y="${by + 0.4}" text-anchor="middle" dominant-baseline="central" font-size="8.5" font-weight="800" fill="${textOn(route.color)}">${esc(route.read)}</text>`
+  }
+  return `<path d="${d}" fill="none" stroke="${route.color}" stroke-width="3" stroke-linecap="round"${dash}/>${end}${badge}`
+}
+
+function annotationSvg(note: Annotation): string {
+  const lines = note.text.split('\n')
+  const spans = lines
+    .map((l, i) => `<tspan x="${note.x}" dy="${i === 0 ? 0 : 13}">${esc(l)}</tspan>`)
+    .join('')
+  return `<text x="${note.x}" y="${note.y}" font-size="11" font-weight="700" fill="${note.color}" stroke="#fff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${spans}</text>`
 }
 
 function playerSvg(p: Player): string {
@@ -121,6 +138,7 @@ export function playToSvg(play: Play): string {
     fieldBackground(play.ballX ?? FIELD.BALL_X, play.yardsToGoal) +
     play.routes.map(routeSvg).join('') +
     play.players.map(playerSvg).join('') +
+    (play.annotations ?? []).map(annotationSvg).join('') +
     `</svg>`
   )
 }

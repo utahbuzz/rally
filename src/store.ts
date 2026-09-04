@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import {
+  Annotation,
   DEFAULT_DISPLAY,
   DisplaySettings,
   FIELD,
@@ -31,6 +32,7 @@ interface Store {
   routeColor: string
   selectedPlayerId: string | null
   selectedRouteId: string | null
+  selectedAnnotationId: string | null
   drawing: { playerId: string; points: Point[] } | null
   past: HistoryEntry[]
   future: HistoryEntry[]
@@ -43,9 +45,11 @@ interface Store {
   selectPlay: (id: string) => void
   selectPlayer: (id: string | null) => void
   selectRoute: (id: string | null) => void
+  selectAnnotation: (id: string | null) => void
   newPlay: (offFormation?: string, defFormation?: string) => void
   duplicatePlay: (id: string) => void
   deletePlay: (id: string) => void
+  toggleStar: (id: string) => void
   updatePlay: (patch: Partial<Play>) => void
   applyFormation: (team: Team, name: string) => void
   setBallSpot: (x: number) => void
@@ -66,6 +70,10 @@ interface Store {
   clearPlayerRoute: (playerId: string) => void
   setRouteKind: (routeId: string, kind: RouteKind) => void
   recolorRoute: (routeId: string, color: string) => void
+  setRouteRead: (routeId: string, read?: string) => void
+  addAnnotation: (p: Point) => void
+  updateAnnotation: (id: string, patch: Partial<Annotation>) => void
+  moveAnnotation: (id: string, dx: number, dy: number) => void
   deleteSelection: () => void
   commit: () => void
   undo: () => void
@@ -123,6 +131,7 @@ export const useStore = create<Store>()(
         routeColor: ROUTE_COLORS[0],
         selectedPlayerId: null,
         selectedRouteId: null,
+        selectedAnnotationId: null,
         drawing: null,
         past: [],
         future: [],
@@ -138,9 +147,16 @@ export const useStore = create<Store>()(
         },
 
         selectPlay: (id) =>
-          set({ currentId: id, selectedPlayerId: null, selectedRouteId: null, drawing: null }),
-        selectPlayer: (id) => set({ selectedPlayerId: id, selectedRouteId: null }),
-        selectRoute: (id) => set({ selectedRouteId: id, selectedPlayerId: null }),
+          set({
+            currentId: id,
+            selectedPlayerId: null,
+            selectedRouteId: null,
+            selectedAnnotationId: null,
+            drawing: null,
+          }),
+        selectPlayer: (id) => set({ selectedPlayerId: id, selectedRouteId: null, selectedAnnotationId: null }),
+        selectRoute: (id) => set({ selectedRouteId: id, selectedPlayerId: null, selectedAnnotationId: null }),
+        selectAnnotation: (id) => set({ selectedAnnotationId: id, selectedPlayerId: null, selectedRouteId: null }),
 
         newPlay: (offFormation, defFormation) => {
           const play = makePlay(offFormation, defFormation)
@@ -175,6 +191,11 @@ export const useStore = create<Store>()(
             const currentId = s.currentId === id ? (plays[0]?.id ?? '') : s.currentId
             return { plays, currentId, past: s.past.filter((h) => h.playId !== id), future: [] }
           }),
+
+        toggleStar: (id) =>
+          set((st) => ({
+            plays: st.plays.map((p) => (p.id === id ? { ...p, starred: !p.starred } : p)),
+          })),
 
         updatePlay: (patch) => patchCurrent((p) => ({ ...p, ...patch })),
 
@@ -223,6 +244,7 @@ export const useStore = create<Store>()(
               ...r,
               points: r.points.map((pt) => ({ x: respot(pt.x, from, x), y: pt.y })),
             })),
+            annotations: (p.annotations ?? []).map((a) => ({ ...a, x: respot(a.x, from, x) })),
           }))
         },
 
@@ -244,6 +266,10 @@ export const useStore = create<Store>()(
               ...r,
               points: r.points.map((pt) => ({ x: pt.x, y: redepth(pt.y, p.yardsToGoal, yardsToGoal) })),
             })),
+            annotations: (p.annotations ?? []).map((a) => ({
+              ...a,
+              y: redepth(a.y, p.yardsToGoal, yardsToGoal),
+            })),
           }))
         },
 
@@ -258,6 +284,7 @@ export const useStore = create<Store>()(
               ...r,
               points: r.points.map((pt) => ({ x: FIELD.W - pt.x, y: pt.y })),
             })),
+            annotations: (p.annotations ?? []).map((a) => ({ ...a, x: FIELD.W - a.x })),
           }))
         },
 
@@ -387,9 +414,50 @@ export const useStore = create<Store>()(
             routes: p.routes.map((r) => (r.id === routeId ? { ...r, color } : r)),
           })),
 
+        setRouteRead: (routeId, read) => {
+          get().commit()
+          patchCurrent((p) => ({
+            ...p,
+            routes: p.routes.map((r) => {
+              if (r.id !== routeId) return r
+              const next = { ...r, read }
+              if (!read) delete next.read
+              return next
+            }),
+          }))
+        },
+
+        addAnnotation: (pt) => {
+          get().commit()
+          const note: Annotation = { id: uid(), x: pt.x, y: pt.y, text: '', color: '#0f172a' }
+          patchCurrent((p) => ({ ...p, annotations: [...(p.annotations ?? []), note] }))
+          set({ selectedAnnotationId: note.id, selectedPlayerId: null, selectedRouteId: null, tool: 'select' })
+        },
+
+        updateAnnotation: (id, patch) =>
+          patchCurrent((p) => ({
+            ...p,
+            annotations: (p.annotations ?? []).map((a) => (a.id === id ? { ...a, ...patch } : a)),
+          })),
+
+        moveAnnotation: (id, dx, dy) =>
+          patchCurrent((p) => ({
+            ...p,
+            annotations: (p.annotations ?? []).map((a) =>
+              a.id === id ? { ...a, x: a.x + dx, y: a.y + dy } : a,
+            ),
+          })),
+
         deleteSelection: () => {
           const s = get()
-          if (s.selectedRouteId) {
+          if (s.selectedAnnotationId) {
+            s.commit()
+            patchCurrent((p) => ({
+              ...p,
+              annotations: (p.annotations ?? []).filter((a) => a.id !== s.selectedAnnotationId),
+            }))
+            set({ selectedAnnotationId: null })
+          } else if (s.selectedRouteId) {
             s.commit()
             patchCurrent((p) => ({ ...p, routes: p.routes.filter((r) => r.id !== s.selectedRouteId) }))
             set({ selectedRouteId: null })
@@ -425,6 +493,7 @@ export const useStore = create<Store>()(
             currentId: entry.playId,
             selectedPlayerId: null,
             selectedRouteId: null,
+            selectedAnnotationId: null,
             drawing: null,
           })
         },
@@ -441,6 +510,7 @@ export const useStore = create<Store>()(
             currentId: entry.playId,
             selectedPlayerId: null,
             selectedRouteId: null,
+            selectedAnnotationId: null,
           })
         },
 
@@ -448,7 +518,15 @@ export const useStore = create<Store>()(
         setPrintSize: (sz) => set({ printSize: sz }),
 
         importPlays: (plays) =>
-          set({ plays, currentId: plays[0]?.id ?? '', past: [], future: [], selectedPlayerId: null, selectedRouteId: null }),
+          set({
+            plays,
+            currentId: plays[0]?.id ?? '',
+            past: [],
+            future: [],
+            selectedPlayerId: null,
+            selectedRouteId: null,
+            selectedAnnotationId: null,
+          }),
       }
     },
     {

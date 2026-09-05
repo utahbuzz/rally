@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
-import { FIELD_SPOTS, HASH_SPOTS, hashIdForX, Play } from '../types'
+import { DisplaySettings, FIELD_SPOTS, HASH_SPOTS, hashIdForX, Play } from '../types'
 import { DEFENSE_FORMATIONS, OFFENSE_FORMATIONS } from '../data/formations'
 import { getShareUrl, onSyncStatus, SyncStatus } from '../sync'
 import { exportCurrentPlayPNG, exportPlaybookJSON, parsePlaybookJSON } from '../utils/export'
@@ -8,6 +8,7 @@ import { exportCurrentPlayPNG, exportPlaybookJSON, parsePlaybookJSON } from '../
 function SyncChip() {
   const [status, setStatus] = useState<SyncStatus>('local')
   const [copied, setCopied] = useState(false)
+  const [showLink, setShowLink] = useState(false)
   useEffect(() => onSyncStatus(setStatus), [])
 
   const copyLink = async () => {
@@ -16,7 +17,9 @@ function SyncChip() {
       setCopied(true)
       setTimeout(() => setCopied(false), 1600)
     } catch {
-      prompt('Copy your playbook link:', getShareUrl())
+      // clipboard blocked (and prompt() is ignored in a sandboxed frame) —
+      // put the link on screen so it can still be copied by hand
+      setShowLink(true)
     }
   }
 
@@ -28,13 +31,27 @@ function SyncChip() {
     )
   }
   return (
-    <button
-      className="sync-chip cloud"
-      onClick={copyLink}
-      title="Synced to the cloud. Click to copy your playbook link — open it on any device (or hand it to the AI) to work on the same playbook."
-    >
-      {copied ? 'Link copied!' : status === 'syncing' ? 'Saving…' : '☁ Synced'}
-    </button>
+    <>
+      <button
+        className="sync-chip cloud"
+        onClick={copyLink}
+        title="Synced to the cloud. Click to copy your playbook link — open it on any device (or hand it to the AI) to work on the same playbook."
+      >
+        {copied ? 'Link copied!' : status === 'syncing' ? 'Saving…' : '☁ Synced'}
+      </button>
+      {showLink && (
+        <div className="modal-scrim" onClick={() => setShowLink(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Your playbook link</h3>
+            <p>Open this on any device — or hand it to the AI — to work on the same playbook.</p>
+            <input className="text-input" readOnly value={getShareUrl()} onFocus={(e) => e.currentTarget.select()} />
+            <div className="modal-actions">
+              <button className="btn primary" onClick={() => setShowLink(false)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -46,19 +63,28 @@ export function TopBar({ play, onOpenCoach }: { play: Play; onOpenCoach: () => v
   const display = useStore((st) => st.display)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // window.confirm / window.alert are ignored in a sandboxed frame (an
+  // embedded preview), so restore confirms in the page instead
+  const [pendingImport, setPendingImport] = useState<{ plays: Play[]; display?: DisplaySettings } | null>(null)
+  const [importError, setImportError] = useState('')
+
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    setImportError('')
     try {
-      const { plays, display } = parsePlaybookJSON(await file.text())
-      if (confirm(`Replace your current playbook with ${plays.length} imported play(s)?`)) {
-        s().importPlays(plays)
-        if (display) s().setDisplay(display)
-      }
+      setPendingImport(parsePlaybookJSON(await file.text()))
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not read that file')
+      setImportError(err instanceof Error ? err.message : 'Could not read that file')
     }
+  }
+
+  const applyImport = () => {
+    if (!pendingImport) return
+    s().importPlays(pendingImport.plays)
+    if (pendingImport.display) s().setDisplay(pendingImport.display)
+    setPendingImport(null)
   }
 
   return (
@@ -162,6 +188,35 @@ export function TopBar({ play, onOpenCoach }: { play: Play; onOpenCoach: () => v
         </button>
         <input ref={fileRef} type="file" accept="application/json" hidden onChange={onImportFile} />
       </div>
+
+      {(pendingImport || importError) && (
+        <div className="modal-scrim" onClick={() => { setPendingImport(null); setImportError('') }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            {importError ? (
+              <>
+                <h3>That file didn't load</h3>
+                <p>{importError}</p>
+                <div className="modal-actions">
+                  <button className="btn primary" onClick={() => setImportError('')}>OK</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3>Restore playbook</h3>
+                <p>
+                  Replace your current playbook ({plays.length} play{plays.length === 1 ? '' : 's'})
+                  with {pendingImport!.plays.length} play{pendingImport!.plays.length === 1 ? '' : 's'}{' '}
+                  from this file? Your current plays will be gone.
+                </p>
+                <div className="modal-actions">
+                  <button className="btn ghost" onClick={() => setPendingImport(null)}>Cancel</button>
+                  <button className="btn primary" onClick={applyImport}>Replace</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   )
 }

@@ -1231,3 +1231,66 @@ select {
   border-color: #d97706;
   color: #fff;
 }
+
+/* ---- In-page dialogs (window.confirm is ignored in sandboxed frames) --- */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 27, 34, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 20px;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(27, 27, 34, 0.22);
+  padding: 18px 20px 16px;
+  max-width: 400px;
+  width: 100%;
+}
+.modal h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+.modal p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.modal .text-input {
+  margin-bottom: 14px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* card actions must clear the sticky group header, and be reachable on touch */
+.card-actions {
+  z-index: 2;
+}
+.card-actions button.confirm-del {
+  width: auto;
+  padding: 0 8px;
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.card-actions button.confirm-del:hover {
+  background: #c93b40;
+  color: #fff;
+}
+@media (hover: none) {
+  .card-actions {
+    display: flex;
+  }
+}

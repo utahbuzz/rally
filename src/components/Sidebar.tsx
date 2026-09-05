@@ -48,6 +48,10 @@ export function Sidebar() {
   const [starredOnly, setStarredOnly] = useState(false)
   const [groupBy, setGroupBy] = useState<GroupBy>('formation')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // deleting confirms inline rather than through window.confirm, which is
+  // ignored outright in a sandboxed frame (an embedded preview) — the button
+  // would look dead
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
 
   const allTags = useMemo(() => {
     const set = new Set<string>()
@@ -101,25 +105,39 @@ export function Sidebar() {
         </div>
       </div>
       <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-        <button
-          className={`star ${p.starred ? 'on' : ''}`}
-          title={p.starred ? 'Remove from the shortlist' : 'Add to the shortlist'}
-          onClick={() => s().toggleStar(p.id)}
-        >
-          {p.starred ? '★' : '☆'}
-        </button>
-        <button title="Duplicate play" onClick={() => s().duplicatePlay(p.id)}>
-          ⧉
-        </button>
-        <button
-          title="Delete play"
-          className="danger"
-          onClick={() => {
-            if (confirm(`Delete "${p.name}"?`)) s().deletePlay(p.id)
-          }}
-        >
-          ✕
-        </button>
+        {pendingDelete === p.id ? (
+          <>
+            <button
+              className="confirm-del"
+              title={`Delete "${p.name}" for good`}
+              onClick={() => {
+                s().deletePlay(p.id)
+                setPendingDelete(null)
+              }}
+            >
+              Delete?
+            </button>
+            <button title="Keep it" onClick={() => setPendingDelete(null)}>
+              ↩
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              className={`star ${p.starred ? 'on' : ''}`}
+              title={p.starred ? 'Remove from the shortlist' : 'Add to the shortlist'}
+              onClick={() => s().toggleStar(p.id)}
+            >
+              {p.starred ? '★' : '☆'}
+            </button>
+            <button title="Duplicate play" onClick={() => s().duplicatePlay(p.id)}>
+              ⧉
+            </button>
+            <button title="Delete play" className="danger" onClick={() => setPendingDelete(p.id)}>
+              ✕
+            </button>
+          </>
+        )}
       </div>
     </div>
   )

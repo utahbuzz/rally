@@ -195,12 +195,17 @@ npm run build    # type-check + single-file production build in dist/
 node scripts/smoke.mjs  # Playwright smoke test against dist/index.html
 ```
 
-The production build is a single self-contained `dist/index.html` (~120 KB
+The production build is a single self-contained `dist/index.html` (~130 KB
 gzipped) — host it on any static host, or open it from disk. It must be
 served as `text/html`; hosts that serve HTML as `text/plain` (Supabase, the
-GitHub CDNs) show the source instead of the app. File downloads (PNG
-export, backup) require a normal browser context; sandboxed preview iframes
-may block them.
+GitHub CDNs) show the source instead of the app.
+
+The app never calls `window.confirm`, `alert` or `prompt`: a sandboxed frame
+without `allow-modals` ignores them outright and they return `false`, which
+made the delete button look dead in embedded previews. Destructive actions
+confirm in the page instead. File downloads (PNG export, backup) still need a
+normal browser context — a sandboxed preview blocks those at the browser
+level, so use the hosted URL for exports.
 
 ## Stack
 

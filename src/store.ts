@@ -554,11 +554,15 @@ export const useStore = create<Store>()(
   ),
 )
 
-/** Ensure currentId is valid after hydration / first run. */
+/**
+ * Ensure currentId is valid after hydration / first run. A brand-new store
+ * already starts with the sample plays, so an empty playbook here means the
+ * coach deleted the last one — give them a blank play, not the samples back.
+ */
 export function ensureCurrent(): void {
   const s = useStore.getState()
   if (!s.plays.length) {
-    useStore.setState({ plays: seedPlays() })
+    useStore.getState().newPlay('Gun Spread (2x2)')
   }
   const st = useStore.getState()
   if (!st.plays.find((p) => p.id === st.currentId)) {

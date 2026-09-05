@@ -161,7 +161,22 @@ console.log('progression on the print card:', await page.locator('.print-card-re
 await page.getByRole('button', { name: 'Close' }).click()
 await page.waitForTimeout(200)
 
-// 14. persistence: reload and count plays
+// 14. delete confirms in-page (window.confirm is ignored in sandboxed frames)
+const nativeDialogs = []
+page.on('dialog', async (d) => { nativeDialogs.push(d.type()); await d.dismiss() })
+const beforeDelete = await page.locator('.play-card').count()
+await page.locator('.play-card').last().hover()
+await page.locator('.play-card').last().locator('.card-actions button.danger').click()
+await page.waitForTimeout(200)
+console.log('inline delete confirm shown:', (await page.locator('.confirm-del').count()) === 1)
+await page.locator('.confirm-del').first().click()
+await page.waitForTimeout(300)
+console.log(
+  'play deleted:', (await page.locator('.play-card').count()) < beforeDelete,
+  '| native dialogs used:', nativeDialogs.length,
+)
+
+// 15. persistence: reload and count plays
 await page.reload()
 await page.waitForTimeout(500)
 const cardsAfterReload = await page.locator('.play-card').count()

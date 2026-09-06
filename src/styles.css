@@ -1278,9 +1278,23 @@ select {
   background: #c93b40;
   color: #fff;
 }
+/*
+ * With no hover to reveal them, the card actions are always on — so they
+ * take their own place in the row instead of sitting on top of the play
+ * name, which they otherwise cover.
+ */
 @media (hover: none) {
   .card-actions {
     display: flex;
+    position: static;
+    top: auto;
+    right: auto;
+    flex-shrink: 0;
+    gap: 4px;
+  }
+  .play-card .card-actions button {
+    width: 30px;
+    height: 30px;
   }
 }
 

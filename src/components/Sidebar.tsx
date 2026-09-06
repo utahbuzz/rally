@@ -38,7 +38,7 @@ function group(plays: Play[], by: GroupBy): Array<[string, Play[]]> {
     })
 }
 
-export function Sidebar() {
+export function Sidebar({ onPick }: { onPick?: () => void } = {}) {
   const display = useStore((s) => s.display)
   const plays = useStore((s) => s.plays)
   const currentId = useStore((s) => s.currentId)
@@ -91,7 +91,10 @@ export function Sidebar() {
     <div
       key={p.id}
       className={`play-card ${p.id === currentId ? 'active' : ''}`}
-      onClick={() => s().selectPlay(p.id)}
+      onClick={() => {
+        s().selectPlay(p.id)
+        onPick?.()
+      }}
     >
       <div className="thumb">
         <PlaySVG play={p} display={display} />

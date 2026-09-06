@@ -46,8 +46,13 @@ no learning curve, works on a laptop or a sideline tablet.
 - **Print / PDF** — 4-per-page play cards or 8-per-page wristband sheets via
   the browser print dialog
 - **PNG export** per play, **JSON backup/restore** for the whole playbook
-- **Undo/redo**, keyboard shortcuts (V/R/B/M tools, Ctrl+Z), autosave to
+- **Undo/redo**, keyboard shortcuts (V/R/B/M/T tools, Ctrl+Z), autosave to
   localStorage
+- **Works on a phone or a sideline tablet** — below 1024px the playbook and
+  inspector become drawers reached from a bottom bar, tapping a player raises
+  the quick-route sheet without covering the field, and a phone held in
+  landscape gets the inspector from the side instead so the field keeps its
+  height
 
 ## Coach AI (in-app chat)
 

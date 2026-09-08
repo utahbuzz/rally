@@ -39,12 +39,17 @@ no learning curve, works on a laptop or a sideline tablet.
   print cards carry the progression line ("1 Z → 2 Y → 3 RB")
 - **Notes on the diagram** — the Note tool (T) drops text anywhere on the
   field for a coverage alert, a check or a coaching point; drag to place it
-- **Playbook** — grouped by formation or by your own tags, collapsible with
+- **Folders** — build a week's whole package (🗓️ Week 2 vs Brunswick →
+  🏈 Offense, 🛡️ Defense, 📋 Scout cards) in one click, nest them as deep as
+  you like, rename and re-icon them, and drag plays in. Deleting a folder
+  never deletes plays — they fall back to its parent
+- **Playbook** — view by folder, formation or your own tags, collapsible with
   counts, starred shortlist for a game plan, and a search across names,
   formations, tags and notes; live thumbnails, duplicate and mirror ("Flip")
   in one click
-- **Print / PDF** — 4-per-page play cards or 8-per-page wristband sheets via
-  the browser print dialog
+- **Print / PDF** — 4-per-page play cards, or wristband cards at an exact
+  physical size you set in inches, with cut guides and a 1" calibration
+  square so you can confirm the printer isn't scaling the page
 - **PNG export** per play, **JSON backup/restore** for the whole playbook
 - **Undo/redo**, keyboard shortcuts (V/R/B/M/T tools, Ctrl+Z), autosave to
   localStorage
@@ -128,6 +133,12 @@ the program's IP and does not belong in this public repo.
   "needs_alignment": ["Gun Dallas Right"]
 }
 ```
+
+**Folders** are a "/"-separated path on the play itself — the emoji is simply
+part of the name, the way people label folders in Finder. That means a
+folder travels with its plays through sync, export and the MCP server with no
+extra schema; the store keeps a list of paths alongside it only so a folder
+can exist before anything is in it.
 
 **Hashes:** plays record where the ball is spotted (L / LM / MOF / RM / R,
 the notation practice scripts use). The box travels with the ball while

@@ -59,6 +59,13 @@ export interface Play {
   offFormation: string
   defFormation: string
   tags: string[]
+  /**
+   * Which folder this play lives in, as a "/"-separated path — e.g.
+   * "🗓️ Week 2 vs Brunswick/🏈 Offense". The emoji is part of the name, the
+   * way people label folders in Finder, so it travels with the play and syncs
+   * without a separate schema. Undefined means unfiled.
+   */
+  folder?: string
   /** Pinned to the top of the playbook — a game-plan shortlist. */
   starred?: boolean
   notes: string
@@ -252,4 +259,27 @@ export function markerShape(p: Player, d: DisplaySettings): PlayerShape {
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10)
+}
+
+/** Emoji offered when naming a folder — football first, then the useful rest. */
+export const FOLDER_EMOJI = [
+  '📁', '🗓️', '🏈', '🛡️', '📋', '⭐', '🎯', '🔥',
+  '⚡', '🏆', '📊', '🚀', '🧊', '🌧️', '🏟️', '✅',
+]
+
+/** The three rooms a week's package needs, in install order. */
+export const WEEK_PACKAGE = ['🏈 Offense', '🛡️ Defense', '📋 Scout cards']
+
+export function folderParent(path: string): string | undefined {
+  const cut = path.lastIndexOf('/')
+  return cut === -1 ? undefined : path.slice(0, cut)
+}
+
+export function folderName(path: string): string {
+  const cut = path.lastIndexOf('/')
+  return cut === -1 ? path : path.slice(cut + 1)
+}
+
+export function folderDepth(path: string): number {
+  return path.split('/').length - 1
 }

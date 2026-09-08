@@ -115,6 +115,8 @@ console.log('per-player violet marker:', await page.locator('#play-svg circle[fi
 await page.keyboard.press('Escape')
 
 // 12. playbook organization: groups, star, search
+await page.getByRole('button', { name: 'Formation', exact: true }).click()
+await page.waitForTimeout(200)
 console.log('formation groups:', (await page.locator('.group-head').allTextContents()).length)
 await page.getByRole('button', { name: 'Tag', exact: true }).click()
 await page.waitForTimeout(200)
@@ -166,7 +168,9 @@ const nativeDialogs = []
 page.on('dialog', async (d) => { nativeDialogs.push(d.type()); await d.dismiss() })
 const beforeDelete = await page.locator('.play-card').count()
 await page.locator('.play-card').last().hover()
-await page.locator('.play-card').last().locator('.card-actions button.danger').click()
+await page.locator('.play-card').last().locator('button[title="Move, duplicate or delete"]').click()
+await page.waitForTimeout(200)
+await page.getByRole('button', { name: '✕ Delete play' }).click()
 await page.waitForTimeout(200)
 console.log('inline delete confirm shown:', (await page.locator('.confirm-del').count()) === 1)
 await page.locator('.confirm-del').first().click()

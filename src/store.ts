@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import {
   Annotation,
   DEFAULT_DISPLAY,
+  folderParent,
   DisplaySettings,
   FIELD,
   Play,
@@ -14,6 +15,7 @@ import {
   Team,
   Tool,
   uid,
+  WEEK_PACKAGE,
 } from './types'
 import { findFormation } from './data/formations'
 import { materializeQuickRoute, QuickRoute } from './data/routeTree'
@@ -40,6 +42,8 @@ interface Store {
   printSize: 'large' | 'small'
   /** Wristband card size in inches — must match the insert window it goes into. */
   cardIn: { w: number; h: number }
+  /** Folder paths the coach has made, including ones that hold nothing yet. */
+  folders: string[]
   display: DisplaySettings
 
   setTool: (t: Tool) => void
@@ -48,7 +52,12 @@ interface Store {
   selectPlayer: (id: string | null) => void
   selectRoute: (id: string | null) => void
   selectAnnotation: (id: string | null) => void
-  newPlay: (offFormation?: string, defFormation?: string) => void
+  newPlay: (offFormation?: string, defFormation?: string, folder?: string) => void
+  createFolder: (path: string) => void
+  createWeekPackage: (name: string) => void
+  renameFolder: (path: string, name: string) => void
+  deleteFolder: (path: string) => void
+  movePlay: (playId: string, folder?: string) => void
   duplicatePlay: (id: string) => void
   deletePlay: (id: string) => void
   toggleStar: (id: string) => void
@@ -150,6 +159,7 @@ export const useStore = create<Store>()(
         // card with nothing wasted — but insert windows vary by brand, so this
         // is meant to be measured and changed.
         cardIn: { w: 3, h: 2.25 },
+        folders: [],
         display: DEFAULT_DISPLAY,
 
         setTool: (t) => set({ tool: t, drawing: null }),
@@ -171,10 +181,57 @@ export const useStore = create<Store>()(
         selectRoute: (id) => set({ selectedRouteId: id, selectedPlayerId: null, selectedAnnotationId: null }),
         selectAnnotation: (id) => set({ selectedAnnotationId: id, selectedPlayerId: null, selectedRouteId: null }),
 
-        newPlay: (offFormation, defFormation) => {
+        newPlay: (offFormation, defFormation, folder) => {
           const play = makePlay(offFormation, defFormation)
+          if (folder) play.folder = folder
           set((s) => ({ plays: [play, ...s.plays], currentId: play.id, selectedPlayerId: null, selectedRouteId: null }))
         },
+
+        createFolder: (path) =>
+          set((s) => (s.folders.includes(path) ? {} : { folders: [...s.folders, path] })),
+
+        /** A week's whole package in one action: the week, then its three rooms. */
+        createWeekPackage: (name) =>
+          set((s) => {
+            const wanted = [name, ...WEEK_PACKAGE.map((room) => `${name}/${room}`)]
+            return { folders: [...s.folders, ...wanted.filter((f) => !s.folders.includes(f))] }
+          }),
+
+        renameFolder: (path, name) => {
+          const clean = name.trim().replace(/\//g, ' ')
+          if (!clean) return
+          const parent = folderParent(path)
+          const next = parent ? `${parent}/${clean}` : clean
+          if (next === path) return
+          const move = (f: string) =>
+            f === path || f.startsWith(`${path}/`) ? next + f.slice(path.length) : f
+          set((s) => ({
+            folders: [...new Set(s.folders.map(move))],
+            plays: s.plays.map((p) => (p.folder ? { ...p, folder: move(p.folder) } : p)),
+          }))
+        },
+
+        /** Removing a folder never removes plays — they fall back to its parent. */
+        deleteFolder: (path) => {
+          const parent = folderParent(path)
+          const inside = (f: string) => f === path || f.startsWith(`${path}/`)
+          set((s) => ({
+            folders: s.folders.filter((f) => !inside(f)),
+            plays: s.plays.map((p) =>
+              p.folder && inside(p.folder) ? { ...p, folder: parent, updatedAt: Date.now() } : p,
+            ),
+          }))
+        },
+
+        movePlay: (playId, folder) =>
+          set((s) => ({
+            plays: s.plays.map((p) => {
+              if (p.id !== playId) return p
+              const next = { ...p, folder, updatedAt: Date.now() }
+              if (!folder) delete next.folder
+              return next
+            }),
+          })),
 
         duplicatePlay: (id) => {
           const src = get().plays.find((p) => p.id === id)
@@ -575,6 +632,7 @@ export const useStore = create<Store>()(
         routeColor: s.routeColor,
         display: s.display,
         cardIn: s.cardIn,
+        folders: s.folders,
       }),
     },
   ),

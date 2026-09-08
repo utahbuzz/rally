@@ -38,6 +38,10 @@ no learning curve, works on a laptop or a sideline tablet.
 - **Display settings** — position letters, jersey numbers or blank markers;
   circles, squares, triangles or bare letters per side; and fills by team or
   by position group, plus a colour on any single player
+- **Floating toolbar** — click a player and its controls appear on the field
+  beside him: the six common routes inline, the rest behind More, marker shape
+  and colour, delete. Select a route and the same bar becomes kind, read
+  number and colour. No permanent side panel, so the field is ~15% larger
 - **Drag anything** — players carry their routes with them
 - **Read progression** — number a route 1 / 2 / 3 / C and the badge is drawn
   at the end of it, so a quarterback can read the order straight off the card;

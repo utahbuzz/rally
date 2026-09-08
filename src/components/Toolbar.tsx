@@ -1,6 +1,8 @@
 import { useStore } from '../store'
+import { Play } from '../types'
 import { ROUTE_COLORS, Tool } from '../types'
 import { ConceptMenu } from './ConceptMenu'
+import { DetailsMenu } from './DetailsMenu'
 import { DisplayMenu } from './DisplayMenu'
 
 const TOOLS: Array<{ id: Tool; label: string; icon: string; key: string; hint: string }> = [
@@ -11,7 +13,7 @@ const TOOLS: Array<{ id: Tool; label: string; icon: string; key: string; hint: s
   { id: 'note', label: 'Note', icon: 'T', key: 'T', hint: 'Write a note on the play' },
 ]
 
-export function Toolbar() {
+export function Toolbar({ play, compact }: { play: Play; compact: boolean }) {
   const tool = useStore((s) => s.tool)
   const routeColor = useStore((s) => s.routeColor)
   const s = useStore.getState
@@ -34,6 +36,8 @@ export function Toolbar() {
       <div className="tool-group">
         <ConceptMenu />
         <DisplayMenu />
+        {/* on a phone this lives in the Edit sheet instead */}
+        {!compact && <DetailsMenu play={play} />}
       </div>
       <div className="tool-group colors">
         {ROUTE_COLORS.map((c) => (

@@ -64,14 +64,19 @@ export default function App() {
             <Sidebar onPick={() => compact && setSheet(null)} />
           </div>
           <main className="canvas-area">
-            <Toolbar />
+            <Toolbar play={play} compact={compact} />
             <div className="field-wrap">
               <Field play={play} />
             </div>
           </main>
-          <div className={`panel-host panel-bottom ${sheet === 'edit' ? 'open' : ''}`}>
-            <Inspector play={play} />
-          </div>
+          {/* the inspector is the compact-mode surface only — on a wide screen
+              the floating toolbar handles selections and the field takes the
+              space the panel used to hold open */}
+          {compact && (
+            <div className={`panel-host panel-bottom ${sheet === 'edit' ? 'open' : ''}`}>
+              <Inspector play={play} />
+            </div>
+          )}
           <Coordinator open={coachOpen} onClose={() => setCoachOpen(false)} />
         </div>
 

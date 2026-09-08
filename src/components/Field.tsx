@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { FIELD, Play, Point } from '../types'
 import { clampToField, roundedPath, snap45 } from '../utils/geometry'
+import { FloatingBar } from './FloatingBar'
 import { AnnotationGlyph, FieldBackground, playerNumbers, PlayerGlyph, PLAYER_R, RouteGlyph } from './PlayGraphics'
+import { useCompact } from '../utils/useCompact'
 
 type Drag =
   | { type: 'player'; id: string; last: Point }
@@ -22,6 +24,8 @@ export function Field({ play }: { play: Play }) {
   const selectedRouteId = useStore((s) => s.selectedRouteId)
   const selectedAnnotationId = useStore((s) => s.selectedAnnotationId)
   const display = useStore((s) => s.display)
+  const compact = useCompact()
+  const [anchor, setAnchor] = useState<Point | null>(null)
   const s = useStore.getState
 
   const toField = (e: { clientX: number; clientY: number }): Point => {
@@ -159,6 +163,39 @@ export function Field({ play }: { play: Play }) {
 
   const numbers = playerNumbers(play.players)
   const selectedRoute = play.routes.find((r) => r.id === selectedRouteId)
+  const selectedPlayer = play.players.find((p) => p.id === selectedPlayerId)
+  const selectedNote = (play.annotations ?? []).find((a) => a.id === selectedAnnotationId)
+
+  // where the floating toolbar should sit: over the selected thing itself
+  const target = selectedPlayer
+    ? { x: selectedPlayer.x, y: selectedPlayer.y }
+    : selectedNote
+      ? { x: selectedNote.x, y: selectedNote.y }
+      : selectedRoute
+        ? selectedRoute.points[selectedRoute.points.length - 1]
+        : null
+
+  useLayoutEffect(() => {
+    const svg = svgRef.current
+    const host = svg?.parentElement
+    if (!svg || !host || !target || compact) {
+      setAnchor(null)
+      return
+    }
+    const place = () => {
+      const m = svg.getScreenCTM()
+      if (!m) return
+      const pt = svg.createSVGPoint()
+      pt.x = target.x
+      pt.y = target.y
+      const at = pt.matrixTransform(m)
+      const box = host.getBoundingClientRect()
+      setAnchor({ x: at.x - box.left, y: at.y - box.top })
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [target?.x, target?.y, compact])
   const drawingPlayer = drawing ? play.players.find((p) => p.id === drawing.playerId) : null
 
   // live preview of the in-progress route
@@ -170,6 +207,7 @@ export function Field({ play }: { play: Play }) {
   const cursor = drawing ? 'crosshair' : tool === 'select' ? 'default' : tool === 'note' ? 'text' : 'crosshair'
 
   return (
+    <>
     <svg
       ref={svgRef}
       id="play-svg"
@@ -252,5 +290,7 @@ export function Field({ play }: { play: Play }) {
         </text>
       )}
     </svg>
+    {!compact && <FloatingBar play={play} anchor={anchor} />}
+    </>
   )
 }

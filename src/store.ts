@@ -38,6 +38,8 @@ interface Store {
   future: HistoryEntry[]
   printMode: boolean
   printSize: 'large' | 'small'
+  /** Wristband card size in inches — must match the insert window it goes into. */
+  cardIn: { w: number; h: number }
   display: DisplaySettings
 
   setTool: (t: Tool) => void
@@ -80,6 +82,7 @@ interface Store {
   redo: () => void
   setPrintMode: (on: boolean) => void
   setPrintSize: (s: 'large' | 'small') => void
+  setCardIn: (patch: Partial<{ w: number; h: number }>) => void
   importPlays: (plays: Play[]) => void
 }
 
@@ -104,6 +107,12 @@ function makePlay(offFormation = 'Gun Spread (2x2)', defFormation = '', ballX = 
     routes: [],
     updatedAt: Date.now(),
   }
+}
+
+/** Keep a card size inside what a sheet of paper can actually hold. */
+function clampIn(v: number): number {
+  if (!Number.isFinite(v)) return 1
+  return Math.min(Math.max(Math.round(v * 100) / 100, 0.75), 7.5)
 }
 
 function clone<T>(v: T): T {
@@ -137,6 +146,10 @@ export const useStore = create<Store>()(
         future: [],
         printMode: false,
         printSize: 'large' as const,
+        // 3.00 x 2.25in is the field's own 4:3 aspect, so the diagram fills the
+        // card with nothing wasted — but insert windows vary by brand, so this
+        // is meant to be measured and changed.
+        cardIn: { w: 3, h: 2.25 },
         display: DEFAULT_DISPLAY,
 
         setTool: (t) => set({ tool: t, drawing: null }),
@@ -516,6 +529,13 @@ export const useStore = create<Store>()(
 
         setPrintMode: (on) => set({ printMode: on }),
         setPrintSize: (sz) => set({ printSize: sz }),
+        setCardIn: (patch) =>
+          set((st) => ({
+            cardIn: {
+              w: clampIn(patch.w ?? st.cardIn.w),
+              h: clampIn(patch.h ?? st.cardIn.h),
+            },
+          })),
 
         importPlays: (plays) =>
           set({
@@ -549,7 +569,13 @@ export const useStore = create<Store>()(
           }
         }
       }),
-      partialize: (s) => ({ plays: s.plays, currentId: s.currentId, routeColor: s.routeColor, display: s.display }),
+      partialize: (s) => ({
+        plays: s.plays,
+        currentId: s.currentId,
+        routeColor: s.routeColor,
+        display: s.display,
+        cardIn: s.cardIn,
+      }),
     },
   ),
 )

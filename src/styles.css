@@ -1920,3 +1920,55 @@ select {
   background: var(--border);
   margin: 4px 2px;
 }
+
+/* ---- Concept picker -------------------------------------------------- */
+.concept-btn {
+  color: var(--accent);
+  font-weight: 700;
+}
+.concept-pop {
+  width: 330px;
+  left: 0;
+  right: auto;
+}
+.concept-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.concept-btn-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--panel);
+  transition: border-color 0.12s, background 0.12s;
+}
+.concept-btn-item:hover {
+  border-color: var(--accent);
+  background: var(--accent-softer);
+}
+.concept-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.concept-note {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+@media (max-width: 1024px) {
+  .concept-pop {
+    width: min(92vw, 360px);
+  }
+  .concept-btn-item { min-height: 52px; }
+}

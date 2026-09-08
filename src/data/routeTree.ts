@@ -28,8 +28,8 @@ export const QUICK_ROUTES: QuickRoute[] = [
 ]
 
 export const QUICK_ASSIGNMENTS: QuickRoute[] = [
-  { name: 'Pass Pro', kind: 'block', points: [{ x: 0, y: -9 }] },
-  { name: 'Drive Blk', kind: 'block', points: [{ x: 6, y: -16 }] },
+  { name: 'Pass Pro', kind: 'block', points: [{ x: 0, y: -20 }] },
+  { name: 'Drive Blk', kind: 'block', points: [{ x: 6, y: -26 }] },
   { name: 'Pull Rt', kind: 'block', points: [{ x: 0, y: 12 }, { x: 55, y: 10 }, { x: 72, y: -12 }] },
   { name: 'Pull Lt', kind: 'block', points: [{ x: 0, y: 12 }, { x: -55, y: 10 }, { x: -72, y: -12 }] },
   { name: 'Lead', kind: 'block', points: [{ x: 0, y: -30 }, { x: 14, y: -52 }] },

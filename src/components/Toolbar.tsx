@@ -1,5 +1,6 @@
 import { useStore } from '../store'
 import { ROUTE_COLORS, Tool } from '../types'
+import { ConceptMenu } from './ConceptMenu'
 import { DisplayMenu } from './DisplayMenu'
 
 const TOOLS: Array<{ id: Tool; label: string; icon: string; key: string; hint: string }> = [
@@ -31,6 +32,7 @@ export function Toolbar() {
         ))}
       </div>
       <div className="tool-group">
+        <ConceptMenu />
         <DisplayMenu />
       </div>
       <div className="tool-group colors">

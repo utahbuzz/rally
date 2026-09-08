@@ -21,6 +21,11 @@ no learning curve, works on a laptop or a sideline tablet.
 - **Formation library** — 8 offensive sets (Gun Spread, Trips, Empty, Bunch,
   Singleback, Pistol, I-Form, Ace 12) and 4 defensive looks (4-3, 3-4,
   Nickel, Cover 3) with realistic alignments
+- **Concepts** — ✨ Concepts draws a whole play in one click: Smash, Four
+  Verts, Mesh, Flood, Stick, Snag, Dagger, Levels, Slants, plus Inside Zone,
+  Power, Counter and Sweep. Every job assigned, the progression numbered, the
+  line blocked, and the play named, tagged and noted. A coach calls "Smash",
+  not six separate routes
 - **Quick routes** — click a player, click "Post": the full route tree
   (plus blocks, pulls, motion, blitz) is applied and auto-mirrored by side
   of field
@@ -155,6 +160,10 @@ down and vertical routes finish in the end zone instead of running off the
 top of the field. Anchored to open-field depth rather than to the play's own
 contents, the transform is invertible: move the ball back out of the red zone
 and you get the play you drew.
+
+**Concepts** map positions by preference (`['Y','H','W','U']`), so one
+concept lands correctly whether a formation calls its inside receiver H, W or
+U, and nobody is left without a job — see `src/data/concepts.ts`.
 
 **Reads and notes:** every assignment takes a `read` ("1", "2", "3", "C") and
 both play tools take `labels` — short notes placed on the diagram by yard

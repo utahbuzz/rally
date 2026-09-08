@@ -18,7 +18,8 @@ import {
   WEEK_PACKAGE,
 } from './types'
 import { findFormation } from './data/formations'
-import { materializeQuickRoute, QuickRoute } from './data/routeTree'
+import { findConcept } from './data/concepts'
+import { materializeQuickRoute, QUICK_ASSIGNMENTS, QUICK_ROUTES, QuickRoute } from './data/routeTree'
 import { seedPlays } from './data/seed'
 import { redepth, respot, spotFromMid } from './utils/field'
 
@@ -78,6 +79,7 @@ interface Store {
   finishRoute: () => void
   cancelRoute: () => void
   applyQuickRoute: (playerId: string, template: QuickRoute) => void
+  applyConcept: (name: string) => void
   clearPlayerRoute: (playerId: string) => void
   setRouteKind: (routeId: string, kind: RouteKind) => void
   recolorRoute: (routeId: string, color: string) => void
@@ -117,6 +119,19 @@ function makePlay(offFormation = 'Gun Spread (2x2)', defFormation = '', ballX = 
     updatedAt: Date.now(),
   }
 }
+
+/** Route palette by the names a concept uses. */
+const CONCEPT_COLORS: Record<string, string> = {
+  red: ROUTE_COLORS[0],
+  blue: ROUTE_COLORS[1],
+  green: ROUTE_COLORS[2],
+  orange: ROUTE_COLORS[3],
+  purple: ROUTE_COLORS[4],
+  black: ROUTE_COLORS[5],
+}
+
+/** Linemen block automatically when a concept is applied. */
+const OL_LABELS_SET = new Set(['C', 'LT', 'LG', 'RG', 'RT', 'T', 'G', 'FST', 'FSG', 'BST', 'BSG'])
 
 /** Keep a card size inside what a sheet of paper can actually hold. */
 function clampIn(v: number): number {
@@ -463,6 +478,69 @@ export const useStore = create<Store>()(
             ...p,
             routes: [...p.routes.filter((r) => !(r.playerId === playerId && r.kind === template.kind)), route],
           }))
+        },
+
+        /**
+         * Draw a whole concept at once — every job, the reads numbered, and the
+         * line blocked. This is how a coach actually calls a play, and it
+         * replaces whatever was drawn rather than layering on top of it.
+         */
+        applyConcept: (name) => {
+          const concept = findConcept(name)
+          const play = current()
+          if (!concept || !play) return
+          get().commit()
+
+          const ALL = [...QUICK_ROUTES, ...QUICK_ASSIGNMENTS]
+          const ballX = play.ballX ?? FIELD.BALL_X
+          const offense = play.players.filter((p) => p.team === 'O')
+          const taken = new Set<string>()
+          /** First listed label that exists and has not already been given a job. */
+          const pick = (labels: string[]) =>
+            labels
+              .map((l) => offense.find((p) => p.label.toUpperCase() === l.toUpperCase()))
+              .find((p) => p && !taken.has(p.id))
+
+          const routes: Route[] = []
+          const add = (playerId: string, template: QuickRoute, read?: string, colorName?: string) => {
+            const player = offense.find((p) => p.id === playerId)
+            if (!player) return
+            taken.add(player.id)
+            routes.push({
+              id: uid(),
+              playerId: player.id,
+              kind: template.kind,
+              color: CONCEPT_COLORS[colorName ?? ''] ?? ROUTE_COLORS[0],
+              points: materializeQuickRoute(player, template, ballX, play.yardsToGoal),
+              ...(read ? { read } : {}),
+            })
+          }
+
+          for (const a of concept.assignments) {
+            const player = pick(a.labels)
+            const template = ALL.find((t) => t.name.toLowerCase() === a.route.toLowerCase())
+            if (player && template) add(player.id, template, a.read, a.color)
+          }
+          for (const c of concept.custom ?? []) {
+            const player = pick(c.labels)
+            if (player) add(player.id, c.template, undefined, 'black')
+          }
+
+          // the line does the same thing on every rep, so it never has to be clicked
+          const lineBlock = ALL.find((t) => t.name === concept.block)!
+          for (const p of offense) {
+            if (taken.has(p.id) || !OL_LABELS_SET.has(p.label.toUpperCase())) continue
+            add(p.id, lineBlock, undefined, 'black')
+          }
+
+          patchCurrent((prev) => ({
+            ...prev,
+            routes,
+            name: prev.name === 'New Play' || !prev.name.trim() ? concept.name : prev.name,
+            notes: prev.notes.trim() ? prev.notes : concept.notes,
+            tags: prev.tags.length ? prev.tags : concept.tags,
+          }))
+          set({ selectedPlayerId: null, selectedRouteId: null, selectedAnnotationId: null })
         },
 
         clearPlayerRoute: (playerId) => {

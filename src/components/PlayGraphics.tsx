@@ -13,6 +13,7 @@ import {
   readOrder,
 } from '../types'
 import { goalLineY, isGoalToGo, ownGoalLineY } from '../utils/field'
+import { motionLeadsToRoute } from '../utils/motion'
 import { arrowHead, blockBar, roundedPath } from '../utils/geometry'
 
 export const PLAYER_R = 9.5
@@ -148,10 +149,13 @@ export function RouteGlyph({
   route,
   selected,
   faded,
+  continues,
 }: {
   route: Route
   selected?: boolean
   faded?: boolean
+  /** A motion that hands off to a route gets no arrowhead of its own. */
+  continues?: boolean
 }) {
   const pts = route.points
   if (pts.length < 2) return null
@@ -178,6 +182,8 @@ export function RouteGlyph({
           const b = blockBar(from, to, 8.5)
           return <line x1={b.x1} y1={b.y1} x2={b.x2} y2={b.y2} stroke={route.color} strokeWidth={3.4} strokeLinecap="round" />
         })()
+      ) : continues ? (
+        <circle cx={to.x} cy={to.y} r={3.4} fill={route.color} />
       ) : (
         <polygon points={arrowHead(from, to, 11)} fill={route.color} />
       )}
@@ -381,7 +387,11 @@ export function PlaySVG({
     <svg viewBox={`0 0 ${FIELD.W} ${FIELD.H}`} className={className} style={{ display: 'block', pointerEvents: 'none' }}>
       <FieldBackground ballX={play.ballX} yardsToGoal={play.yardsToGoal} />
       {play.routes.map((r) => (
-        <RouteGlyph key={r.id} route={r} />
+        <RouteGlyph
+          key={r.id}
+          route={r}
+          continues={r.kind === 'motion' && motionLeadsToRoute(play.routes, r.playerId)}
+        />
       ))}
       {play.players.map((p) => (
         <PlayerGlyph key={p.id} player={p} display={display} number={numbers[p.id]} />

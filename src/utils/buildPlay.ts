@@ -7,6 +7,7 @@ import { OFFENSE_FORMATIONS, DEFENSE_FORMATIONS, findFormation } from '../data/f
 import { materializeQuickRoute, QUICK_ASSIGNMENTS, QUICK_ROUTES } from '../data/routeTree'
 import { Annotation, FIELD, HASH_SPOTS, Play, Player, Point, Route, RouteKind, ROUTE_COLORS, uid } from '../types'
 import { compressDepth, expandDepth, spotFromMid } from './field'
+import { routeOrigin } from './motion'
 
 const COLOR_NAMES: Record<string, string> = {
   red: ROUTE_COLORS[0],
@@ -86,14 +87,16 @@ export function buildPlay(spec: PlaySpec): { play?: Play; problems: string[] } {
     const color = COLOR_NAMES[(a.color ?? 'red').toLowerCase()] ?? ROUTE_COLORS[0]
     let points: Point[]
     let kind: RouteKind
+    // an assignment that follows this player's motion starts where it ended
+    const from = a.kind === 'motion' ? { x: player.x, y: player.y } : routeOrigin(routes, player)
     if (a.custom_path?.length) {
       const dir = player.team === 'O' ? -1 : 1
       points = [
-        { x: player.x, y: player.y },
+        { x: from.x, y: from.y },
         ...a.custom_path.map((p) => ({
-          x: Math.min(Math.max(player.x + p.x * 10, 6), FIELD.W - 6),
+          x: Math.min(Math.max(from.x + p.x * 10, 6), FIELD.W - 6),
           y: compressDepth(
-            Math.min(Math.max(expandDepth(player.y, yardsToGoal) + p.y * 10 * dir, 6), FIELD.H - 6),
+            Math.min(Math.max(expandDepth(from.y, yardsToGoal) + p.y * 10 * dir, 6), FIELD.H - 6),
             yardsToGoal,
           ),
         })),
@@ -105,7 +108,7 @@ export function buildPlay(spec: PlaySpec): { play?: Play; problems: string[] } {
         problems.push(`unknown route "${a.route}" for ${a.player}`)
         continue
       }
-      points = materializeQuickRoute(player, template, spot.x, yardsToGoal)
+      points = materializeQuickRoute(player, template, spot.x, yardsToGoal, from)
       kind = a.kind ?? template.kind
     } else {
       problems.push(`${a.player} needs a route or custom_path`)

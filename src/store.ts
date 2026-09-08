@@ -22,6 +22,7 @@ import { findConcept } from './data/concepts'
 import { materializeQuickRoute, QUICK_ASSIGNMENTS, QUICK_ROUTES, QuickRoute } from './data/routeTree'
 import { seedPlays } from './data/seed'
 import { redepth, respot, spotFromMid } from './utils/field'
+import { motionEnd, routeOrigin } from './utils/motion'
 
 interface HistoryEntry {
   playId: string
@@ -385,14 +386,27 @@ export const useStore = create<Store>()(
           })),
 
         moveVertex: (routeId, index, pt) =>
-          patchCurrent((p) => ({
-            ...p,
-            routes: p.routes.map((r) =>
-              r.id === routeId
-                ? { ...r, points: r.points.map((q, i) => (i === index ? pt : q)) }
-                : r,
-            ),
-          })),
+          patchCurrent((p) => {
+            const moved = p.routes.find((r) => r.id === routeId)
+            // dragging the end of a motion carries the route that follows it,
+            // so the two never come apart
+            const tail =
+              moved && moved.kind === 'motion' && index === moved.points.length - 1
+                ? { dx: pt.x - moved.points[index].x, dy: pt.y - moved.points[index].y, owner: moved.playerId }
+                : null
+            return {
+              ...p,
+              routes: p.routes.map((r) => {
+                if (r.id === routeId) {
+                  return { ...r, points: r.points.map((q, i) => (i === index ? pt : q)) }
+                }
+                if (tail && r.playerId === tail.owner && r.kind !== 'motion') {
+                  return { ...r, points: r.points.map((q) => ({ x: q.x + tail.dx, y: q.y + tail.dy })) }
+                }
+                return r
+              }),
+            }
+          }),
 
         relabelPlayer: (id, label) =>
           patchCurrent((p) => ({
@@ -427,8 +441,12 @@ export const useStore = create<Store>()(
           const play = current()
           const player = play?.players.find((pl) => pl.id === playerId)
           if (!player) return
+          // drawing a motion starts at his alignment; anything else picks up
+          // from where an existing motion left him
+          const from =
+            get().tool === 'motion' ? { x: player.x, y: player.y } : routeOrigin(play?.routes ?? [], player)
           set({
-            drawing: { playerId, points: [{ x: player.x, y: player.y }] },
+            drawing: { playerId, points: [from] },
             selectedPlayerId: playerId,
             selectedRouteId: null,
           })
@@ -472,7 +490,13 @@ export const useStore = create<Store>()(
             playerId,
             kind: template.kind,
             color: get().routeColor,
-            points: materializeQuickRoute(player, template, play?.ballX ?? FIELD.BALL_X, play?.yardsToGoal),
+            points: materializeQuickRoute(
+              player,
+              template,
+              play?.ballX ?? FIELD.BALL_X,
+              play?.yardsToGoal,
+              template.kind === 'motion' ? undefined : routeOrigin(play?.routes ?? [], player),
+            ),
           }
           patchCurrent((p) => ({
             ...p,
@@ -607,7 +631,26 @@ export const useStore = create<Store>()(
             set({ selectedAnnotationId: null })
           } else if (s.selectedRouteId) {
             s.commit()
-            patchCurrent((p) => ({ ...p, routes: p.routes.filter((r) => r.id !== s.selectedRouteId) }))
+            patchCurrent((p) => {
+              const gone = p.routes.find((r) => r.id === s.selectedRouteId)
+              const routes = p.routes.filter((r) => r.id !== s.selectedRouteId)
+              if (!gone || gone.kind !== 'motion') return { ...p, routes }
+              // the motion is what put him there — without it his route has to
+              // come back to his alignment rather than float in space
+              const owner = p.players.find((pl) => pl.id === gone.playerId)
+              const end = motionEnd([gone], gone.playerId)
+              if (!owner || !end) return { ...p, routes }
+              const dx = owner.x - end.x
+              const dy = owner.y - end.y
+              return {
+                ...p,
+                routes: routes.map((r) =>
+                  r.playerId === gone.playerId
+                    ? { ...r, points: r.points.map((q) => ({ x: q.x + dx, y: q.y + dy })) }
+                    : r,
+                ),
+              }
+            })
             set({ selectedRouteId: null })
           } else if (s.selectedPlayerId) {
             s.commit()

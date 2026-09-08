@@ -46,14 +46,19 @@ export const QUICK_ASSIGNMENTS: QuickRoute[] = [
  * its full open-field depth and then compressed into the space in front of
  * the ball, so clicking "Go" at the +7 draws a fade that finishes in the end
  * zone instead of one drawn off the top of the canvas.
+ *
+ * `origin` overrides where the route starts — a player who motions runs from
+ * where the motion left him, which also decides which way the route mirrors.
  */
 export function materializeQuickRoute(
   player: Player,
   template: QuickRoute,
   ballX: number = FIELD.BALL_X,
   yardsToGoal?: number,
+  origin?: Point,
 ): Point[] {
-  const onRight = player.x >= ballX
+  const from = origin ?? { x: player.x, y: player.y }
+  const onRight = from.x >= ballX
   // Defenders attack downward (+y is toward the offense for them already,
   // since templates use -y = upfield); flip y for defense so routes go toward the LOS.
   const flipY = player.team === 'D' ? -1 : 1
@@ -62,13 +67,13 @@ export function materializeQuickRoute(
   // would otherwise run its break clean off the field
   // the template is drawn against open-field depth, so start from where this
   // player would be standing there and compress the finished route back down
-  const baseY = expandDepth(player.y, yardsToGoal)
+  const baseY = expandDepth(from.y, yardsToGoal)
   const pts = template.points.map((p) => ({
-    x: Math.min(Math.max(player.x + p.x * flipX, 6), FIELD.W - 6),
+    x: Math.min(Math.max(from.x + p.x * flipX, 6), FIELD.W - 6),
     y: baseY + p.y * flipY,
   }))
-  return [{ x: baseY, y: baseY }, ...pts].map((p, i) => ({
-    x: i === 0 ? player.x : p.x,
+  return [{ x: from.x, y: baseY }, ...pts].map((p) => ({
+    x: p.x,
     y: compressDepth(p.y, yardsToGoal),
   }))
 }

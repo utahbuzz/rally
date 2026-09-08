@@ -29,6 +29,10 @@ no learning curve, works on a laptop or a sideline tablet.
 - **Quick routes** — click a player, click "Post": the full route tree
   (plus blocks, pulls, motion, blitz) is applied and auto-mirrored by side
   of field
+- **Motion into a route** — a receiver who motions runs his route from where
+  the motion left him, not from where he lined up. The two lines join, the
+  motion loses its arrowhead at the handoff, and the route mirrors off his new
+  side of the ball — motion across the formation flips which way it breaks
 - **Custom drawing** — routes (arrow), blocks (⊤), motion (dashed), with
   45° snap, rounded breaks, draggable break points, and six route colors
 - **Field position** — spot the ball anywhere from the open field to the +1 or

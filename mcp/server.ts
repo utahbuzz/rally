@@ -18,6 +18,7 @@ import { FIELD, HASH_SPOTS, hashIdForX, MARKER_COLORS, Play, Player, Point, Rout
 import { DEFENSE_FORMATIONS, OFFENSE_FORMATIONS, findFormation } from '../src/data/formations'
 import { QUICK_ROUTES, QUICK_ASSIGNMENTS, materializeQuickRoute } from '../src/data/routeTree'
 import { compressDepth, expandDepth, spotFromMid } from '../src/utils/field'
+import { routeOrigin } from '../src/utils/motion'
 import { COVERAGE_GUIDE, coverageGuide } from '../src/data/coverages'
 import { playToSvg } from './renderSvg'
 import { findPackFormation, loadTeamPack, packFormationPlayers } from './teamPack'
@@ -258,14 +259,16 @@ function buildRoutes(
     const color = COLOR_NAMES[(a.color ?? 'red').toLowerCase()] ?? ROUTE_COLORS[0]
     let points: Point[]
     let kind: Route['kind']
+    // an assignment that follows this player's motion starts where it ended
+    const from = a.kind === 'motion' ? { x: player.x, y: player.y } : routeOrigin(routes, player)
     if (a.custom_path && a.custom_path.length > 0) {
       const dir = player.team === 'O' ? -1 : 1
       points = [
-        { x: player.x, y: player.y },
+        { x: from.x, y: from.y },
         ...a.custom_path.map((p) => ({
-          x: Math.min(Math.max(player.x + p.x * 10, 6), FIELD.W - 6),
+          x: Math.min(Math.max(from.x + p.x * 10, 6), FIELD.W - 6),
           y: compressDepth(
-            Math.min(Math.max(expandDepth(player.y, yardsToGoal) + p.y * 10 * dir, 6), FIELD.H - 6),
+            Math.min(Math.max(expandDepth(from.y, yardsToGoal) + p.y * 10 * dir, 6), FIELD.H - 6),
             yardsToGoal,
           ),
         })),
@@ -277,7 +280,7 @@ function buildRoutes(
         problems.push(`unknown route "${a.route}" for ${a.player} (see get_route_library)`)
         continue
       }
-      points = materializeQuickRoute(player, template, ballX, yardsToGoal)
+      points = materializeQuickRoute(player, template, ballX, yardsToGoal, from)
       kind = a.kind ?? template.kind
     } else {
       problems.push(`assignment for ${a.player} needs a route or custom_path`)

@@ -5,6 +5,7 @@ import { clampToField, roundedPath, snap45 } from '../utils/geometry'
 import { FloatingBar } from './FloatingBar'
 import { AnnotationGlyph, FieldBackground, playerNumbers, PlayerGlyph, PLAYER_R, RouteGlyph } from './PlayGraphics'
 import { useCompact } from '../utils/useCompact'
+import { motionLeadsToRoute } from '../utils/motion'
 
 type Drag =
   | { type: 'player'; id: string; last: Point }
@@ -226,7 +227,12 @@ export function Field({ play }: { play: Play }) {
         <g key={r.id} onPointerDown={(e) => onRouteDown(e, r.id)} style={{ cursor: 'pointer' }}>
           {/* wide invisible hit area */}
           <path d={roundedPath(r.points, 9, PLAYER_R + 2.5)} fill="none" stroke="transparent" strokeWidth={14} />
-          <RouteGlyph route={r} selected={r.id === selectedRouteId} faded={!!drawing && r.playerId !== drawing.playerId} />
+          <RouteGlyph
+            route={r}
+            selected={r.id === selectedRouteId}
+            faded={!!drawing && r.playerId !== drawing.playerId}
+            continues={r.kind === 'motion' && motionLeadsToRoute(play.routes, r.playerId)}
+          />
         </g>
       ))}
 

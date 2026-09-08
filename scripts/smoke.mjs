@@ -194,5 +194,36 @@ console.log(
   await page.locator('.star-tag').count(),
 )
 
+// 16. motion leading into a route joins up (last: it makes a new play)
+await page.locator('.btn.primary.block').click()
+await page.waitForTimeout(350)
+await page.keyboard.press('m')
+const zM = page.locator('#play-svg text', { hasText: /^Z$/ }).first()
+await zM.click({ force: true })
+const fb = await page.locator('#play-svg').boundingBox()
+await page.mouse.click(fb.x + (150 / 533) * fb.width, fb.y + (290 / 400) * fb.height)
+await page.keyboard.press('Enter')
+await page.waitForTimeout(300)
+await page.keyboard.press('v')
+await zM.click({ force: true })
+await page.waitForTimeout(300)
+await page.locator('.float-btn', { hasText: 'Corner' }).click()
+await page.waitForTimeout(350)
+const joined = await page.evaluate(() => {
+  const st = JSON.parse(localStorage.getItem('playcaller-v1')).state
+  const play = st.plays.find((p) => p.id === st.currentId)
+  const z = play.players.find((p) => p.label === 'Z')
+  const m = play.routes.find((r) => r.playerId === z.id && r.kind === 'motion')
+  const r = play.routes.find((r) => r.playerId === z.id && r.kind !== 'motion')
+  if (!m || !r) return null
+  const end = m.points[m.points.length - 1]
+  return {
+    joins: Math.hypot(r.points[0].x - end.x, r.points[0].y - end.y) < 1.5,
+    mirrored: r.points[r.points.length - 1].x < r.points[0].x,
+  }
+})
+console.log('motion -> route joins:', joined?.joins, '| mirrors off the new side:', joined?.mirrored)
+
+
 console.log('ERRORS:', errors.length ? errors : 'none')
 await browser.close()

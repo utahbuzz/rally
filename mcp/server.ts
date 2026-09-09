@@ -20,6 +20,7 @@ import { QUICK_ROUTES, QUICK_ASSIGNMENTS, materializeQuickRoute } from '../src/d
 import { compressDepth, expandDepth, spotFromMid } from '../src/utils/field'
 import { routeOrigin } from '../src/utils/motion'
 import { COVERAGE_GUIDE, coverageGuide } from '../src/data/coverages'
+import { looksLikeBreakdown, parseBreakdown, tendencyReport } from './breakdown'
 import { playToSvg } from './renderSvg'
 import { findPackFormation, loadTeamPack, packFormationPlayers } from './teamPack'
 
@@ -618,6 +619,47 @@ ${sectionHtml}
     writeFileSync(out, html)
     const warn = missing.length ? `\nNot found in playbook (skipped): ${missing.join(', ')}` : ''
     return text(`Wrote "${title}" — ${sections.length} section(s), ${used} play card(s) → ${out}${warn}`)
+  },
+)
+
+server.registerTool(
+  'import_breakdown',
+  {
+    title: 'Read a Hudl breakdown export',
+    description:
+      "Read a game breakdown exported from Hudl (CSV or TSV — one row per play, as the staff tagged it) and report the opponent's tendencies by situation and hash. Use this first when game planning: it tells you what they actually line up in on 3rd and long, which front travels with the ball, and how often they pressure. Then draw their common looks with create_custom_play and put the answers on paper with create_game_plan_sheet. Column names vary between programs, so the report lists which headers it understood and which it ignored.",
+    inputSchema: {
+      path: z.string().describe('Path to the exported .csv or .tsv file'),
+      perspective: z
+        .enum(['defense', 'offense'])
+        .optional()
+        .describe(
+          "Which side of the ball you are scouting: 'defense' groups by their coverage and front (for building your offensive plan), 'offense' by their formation and play. Inferred from the columns when omitted.",
+        ),
+      label: z.string().optional().describe('Name for the report, e.g. "Brunswick — last 3 games"'),
+    },
+  },
+  async ({ path, perspective, label }) => {
+    let raw: string
+    try {
+      raw = readFileSync(resolve(path), 'utf8')
+    } catch {
+      return text(`Could not read "${path}". Export the breakdown from Hudl as CSV and pass the file path.`)
+    }
+    const parsed = parseBreakdown(raw)
+    if (!parsed.rows.length) {
+      return text(
+        `No play rows found in "${path}". Headers seen: ${parsed.headers.join(', ') || '(none)'}. If this is an .xlsx, save it as CSV first.`,
+      )
+    }
+    if (!looksLikeBreakdown(parsed)) {
+      return text(
+        `"${path}" does not look like a play-by-play breakdown — a down or distance column plus a formation, coverage or front column is the minimum.\n` +
+          `Headers seen: ${parsed.headers.slice(0, 20).join(', ') || '(none)'}\n` +
+          `Export the game's breakdown data from Hudl as CSV and try that file.`,
+      )
+    }
+    return text(tendencyReport(parsed, { perspective, label }))
   },
 )
 

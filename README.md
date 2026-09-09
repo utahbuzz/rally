@@ -178,6 +178,18 @@ both play tools take `labels` — short notes placed on the diagram by yard
 coordinates. Ask for a concept and the progression comes numbered, which is
 what makes a printed card usable by a player rather than only by the staff.
 
+**Opponent film:** `import_breakdown` reads a Hudl breakdown export (CSV/TSV,
+one row per play as the staff tagged it) and reports what they actually do —
+coverage and front by down and distance, by hash, and how often they pressure.
+Column names differ between programs, so nothing matches on an exact header:
+every field has aliases and the report names which headers it understood and
+which it ignored, so an unfamiliar export says what to add rather than failing
+quietly. Pointed at a file that is not a breakdown it says so instead of
+reporting confidently on nothing.
+
+`samples/brunswick-breakdown-SAMPLE.csv` is synthetic data in the shape of a
+real export, for dry runs before there is film to work from.
+
 **Scout cards:** `create_custom_play` places every player explicitly, so
 Claude can draw any opponent look — Wing-T, double wing, flexbone,
 unbalanced lines — with pulling guards, ball-carrier paths, and blocking
